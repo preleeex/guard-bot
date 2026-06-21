@@ -6,6 +6,9 @@ import {
   answerChatJoinRequestQuery,
   approveChatJoinRequest,
   declineChatJoinRequest,
+  unmuteMember,
+  kickMember,
+  deleteMessage,
   type JoinDecision,
 } from "../telegram/api";
 import { getScenario } from "./scenarios";
@@ -27,7 +30,7 @@ interface CreateSessionInput {
   applicantUsername?: string | null;
   applicantName?: string | null;
   queryId?: string | null;
-  mode: "query" | "legacy";
+  mode: "query" | "legacy" | "member";
   timeoutSeconds: number;
 }
 
@@ -246,9 +249,28 @@ function decide(
 // --- applying a decision through Telegram ----------------------------------
 
 export async function applyJoinDecision(
-  session: { mode: string; queryId: string | null; chatId: bigint; applicantUserId: bigint },
+  session: {
+    mode: string;
+    queryId: string | null;
+    chatId: bigint;
+    applicantUserId: bigint;
+    challenge?: unknown;
+  },
   decision: Decision
 ): Promise<void> {
+  // Open-group flow: the applicant is already a (muted) member.
+  if (session.mode === "member") {
+    if (decision === "approve") {
+      await unmuteMember(session.chatId, session.applicantUserId);
+    } else if (decision === "decline") {
+      await kickMember(session.chatId, session.applicantUserId);
+    }
+    // queue: leave muted for manual review.
+    const promptId = (session.challenge as { _prompt?: number } | null)?._prompt;
+    if (promptId) await deleteMessage(session.chatId, Number(promptId));
+    return;
+  }
+
   if (session.mode === "query" && session.queryId) {
     await answerChatJoinRequestQuery(session.queryId, decision as JoinDecision);
     return;

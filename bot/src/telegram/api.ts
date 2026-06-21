@@ -158,6 +158,69 @@ export async function declineChatJoinRequest(
   });
 }
 
+// --- member moderation (open-group captcha via restrict-on-join) -----------
+
+const NO_PERMS = {
+  can_send_messages: false,
+  can_send_audios: false,
+  can_send_documents: false,
+  can_send_photos: false,
+  can_send_videos: false,
+  can_send_video_notes: false,
+  can_send_voice_notes: false,
+  can_send_polls: false,
+  can_send_other_messages: false,
+  can_add_web_page_previews: false,
+};
+
+const FULL_PERMS = {
+  can_send_messages: true,
+  can_send_audios: true,
+  can_send_documents: true,
+  can_send_photos: true,
+  can_send_videos: true,
+  can_send_video_notes: true,
+  can_send_voice_notes: true,
+  can_send_polls: true,
+  can_send_other_messages: true,
+  can_add_web_page_previews: true,
+};
+
+// Mute a member until they pass screening.
+export async function muteMember(chatId: number | bigint, userId: number | bigint): Promise<void> {
+  await callApi("restrictChatMember", {
+    chat_id: Number(chatId),
+    user_id: Number(userId),
+    permissions: NO_PERMS,
+  });
+}
+
+// Lift restrictions after a member passes.
+export async function unmuteMember(chatId: number | bigint, userId: number | bigint): Promise<void> {
+  await callApi("restrictChatMember", {
+    chat_id: Number(chatId),
+    user_id: Number(userId),
+    permissions: FULL_PERMS,
+  });
+}
+
+// Remove a member (ban then unban so they can rejoin and retry later).
+export async function kickMember(chatId: number | bigint, userId: number | bigint): Promise<void> {
+  await callApi("banChatMember", { chat_id: Number(chatId), user_id: Number(userId) });
+  await tryCallApi("unbanChatMember", {
+    chat_id: Number(chatId),
+    user_id: Number(userId),
+    only_if_banned: true,
+  });
+}
+
+export async function deleteMessage(
+  chatId: number | bigint,
+  messageId: number
+): Promise<void> {
+  await tryCallApi("deleteMessage", { chat_id: Number(chatId), message_id: messageId });
+}
+
 export async function setWebhook(url: string, secretToken: string): Promise<void> {
   await callApi("setWebhook", {
     url,

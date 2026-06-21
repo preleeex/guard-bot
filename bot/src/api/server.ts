@@ -1,6 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from "express";
-import { webhookCallback } from "grammy";
+import type { Update } from "grammy/types";
 import { config } from "../config";
+import { logger } from "../logger";
 import { bot } from "../telegram/bot";
 import { ownerRouter } from "./routes/owner";
 import { screeningRouter } from "./routes/screening";
@@ -38,11 +39,19 @@ export function buildApp() {
 
   app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
-  // Telegram webhook. grammY verifies the secret token header.
-  app.use(
-    "/telegram/webhook",
-    webhookCallback(bot, "express", { secretToken: config.webhookSecretToken })
-  );
+  // Telegram webhook. Verify the secret token, acknowledge immediately, then
+  // process the update in the background. Acknowledging fast prevents gateway
+  // timeouts and Telegram retry storms (which were exhausting the DB pool).
+  app.post("/telegram/webhook", (req: Request, res: Response) => {
+    if (req.header("X-Telegram-Bot-Api-Secret-Token") !== config.webhookSecretToken) {
+      res.sendStatus(401);
+      return;
+    }
+    res.sendStatus(200);
+    void bot
+      .handleUpdate(req.body as Update)
+      .catch((err) => logger.error("handleUpdate failed", { err: String(err) }));
+  });
 
   // Mini App API.
   app.use("/api/owner", ownerRouter);
