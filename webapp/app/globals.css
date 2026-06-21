@@ -345,6 +345,53 @@ textarea.field {
   align-self: center;
 }
 
+.profile-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0 6px;
+}
+
+/* Bottom navigation tab bar */
+.has-bottom-nav {
+  padding-bottom: 84px;
+}
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  justify-content: space-around;
+  background: var(--tg-section-bg);
+  border-top: 1px solid var(--tg-secondary-bg);
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+}
+
+.bottom-nav button {
+  appearance: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  padding: 4px;
+  color: var(--tg-hint);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.bottom-nav button.active {
+  color: var(--tg-button);
+}
+
 .icon-row {
   display: flex;
   align-items: center;
