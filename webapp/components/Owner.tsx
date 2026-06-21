@@ -46,6 +46,20 @@ export function OwnerApp() {
       .catch(() => undefined);
   }, [load]);
 
+  // Reload when returning to the Mini App (e.g. after adding the bot to a group)
+  // so a freshly auto-connected group shows up without a manual refresh.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [load]);
+
   if (loading && !data) return <Loading />;
   if (error && !data)
     return (
@@ -103,6 +117,7 @@ function Home({
   const [buying, setBuying] = useState(false);
   const [awaiting, setAwaiting] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [showManual, setShowManual] = useState(false);
 
   const addGroup = async () => {
     setAdding(true);
@@ -183,7 +198,7 @@ function Home({
         <SectionHeader icon={<UsersIcon />} title="Группы" />
         <div className="col">
           {groups.length === 0 ? (
-            <p className="hint center">Групп пока нет.</p>
+            <p className="hint center">Групп пока нет. Добавь бота в группу ниже.</p>
           ) : (
             groups.map((g) => (
               <button key={g.chatId} className="list-item" onClick={() => onOpenGroup(g.chatId)}>
@@ -198,24 +213,36 @@ function Home({
             ))
           )}
         </div>
+        <button className="link-btn" onClick={() => reload()}>
+          Обновить
+        </button>
       </Card>
 
       <Card>
         <SectionHeader icon={<GroupAddIcon />} title="Добавить группу" />
-        <Button variant="secondary" onClick={() => openExternal(ADD_TO_GROUP_LINK)}>
-          Добавить бота в группу
-        </Button>
-        <input
-          className="field center"
-          placeholder="@username или id"
-          value={chat}
-          onChange={(e) => setChat(e.target.value)}
-        />
-        <Button disabled={adding || !chat.trim()} onClick={addGroup}>
+        <Button onClick={() => openExternal(ADD_TO_GROUP_LINK)}>
           <span className="btn-icon">
-            <PlusIcon size={18} /> Подключить
+            <PlusIcon size={18} /> Добавить бота с правами админа
           </span>
         </Button>
+        <p className="hint center">Выбери группу и подтверди права. Группа появится здесь сама.</p>
+        {showManual ? (
+          <>
+            <input
+              className="field center"
+              placeholder="@username или id"
+              value={chat}
+              onChange={(e) => setChat(e.target.value)}
+            />
+            <Button variant="secondary" disabled={adding || !chat.trim()} onClick={addGroup}>
+              Подключить
+            </Button>
+          </>
+        ) : (
+          <button className="link-btn" onClick={() => setShowManual(true)}>
+            Подключить вручную
+          </button>
+        )}
         {error ? (
           <p className="hint center" style={{ color: "var(--tg-destructive)" }}>
             {error}

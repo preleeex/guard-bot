@@ -333,6 +333,18 @@ textarea.field {
   text-align: center;
 }
 
+.link-btn {
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--tg-link);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px;
+  align-self: center;
+}
+
 .icon-row {
   display: flex;
   align-items: center;

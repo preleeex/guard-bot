@@ -5,7 +5,7 @@ import { logger } from "../logger";
 import { sendSystemLog } from "./systemLog";
 import { tryCallApi } from "./api";
 import { createScreeningSession, screeningUrl } from "../services/screening";
-import { markGroupRemoved } from "../services/groups";
+import { markGroupRemoved, connectGroup } from "../services/groups";
 
 export const bot = new Bot(config.botToken);
 
@@ -132,13 +132,36 @@ bot.on("chat_join_request", async (ctx) => {
   }
 });
 
-// Detect the bot being removed from a group.
+// Track the bot's own membership: removal, and auto-connect on add.
 bot.on("my_chat_member", async (ctx) => {
   const upd = ctx.myChatMember;
   if (upd.new_chat_member.user.id !== ctx.me.id) return;
+  const chatId = BigInt(upd.chat.id);
   const status = upd.new_chat_member.status;
+
   if (status === "left" || status === "kicked") {
-    await markGroupRemoved(BigInt(upd.chat.id));
+    await markGroupRemoved(chatId);
+    return;
+  }
+
+  // Bot was added or promoted. Auto-connect the group to whoever did it, but
+  // only if they are the real group creator (connectGroup enforces the creator
+  // check and the quota). This makes the group appear in the owner panel
+  // automatically, without manually entering its id.
+  if (
+    (status === "administrator" || status === "member") &&
+    (upd.chat.type === "group" || upd.chat.type === "supergroup")
+  ) {
+    try {
+      await connectGroup({
+        chatId,
+        requesterUserId: BigInt(upd.from.id),
+        title: upd.chat.title,
+      });
+      logger.info("auto-connected group", { chatId: chatId.toString(), by: upd.from.id });
+    } catch (err) {
+      logger.info("auto-connect skipped", { chatId: chatId.toString(), err: String(err) });
+    }
   }
 });
 
