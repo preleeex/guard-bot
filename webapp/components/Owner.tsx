@@ -60,11 +60,15 @@ function Home({
   };
 
   useEffect(() => {
-    // Credit any already-paid invoice on entry, then load.
+    // Render immediately; credit any already-paid invoice in the background and
+    // refresh only if something changed.
+    load().finally(() => setLoading(false));
     api
-      .post("/api/payments/verify")
-      .catch(() => undefined)
-      .finally(() => load().finally(() => setLoading(false)));
+      .post<{ credited: number }>("/api/payments/verify")
+      .then((r) => {
+        if (r.credited > 0) load();
+      })
+      .catch(() => undefined);
   }, []);
 
   if (loading || !quota) return <Loading />;
