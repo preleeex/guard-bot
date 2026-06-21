@@ -37,6 +37,15 @@ export interface RulesConfig {
   agreeLabel?: string;
 }
 
+// --- media (display-only: image / video / voice by URL) --------------------
+export type MediaKind = "image" | "video" | "voice";
+
+export interface MediaConfig {
+  kind: MediaKind;
+  url: string;
+  caption?: string;
+}
+
 export interface ScenarioBlockDTO {
   id: string;
   order: number;

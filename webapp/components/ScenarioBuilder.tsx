@@ -3,6 +3,8 @@
 import type {
   CaptchaConfig,
   CaptchaKind,
+  MediaConfig,
+  MediaKind,
   QuizConfig,
   QuizQuestion,
   RulesConfig,
@@ -19,6 +21,7 @@ const BLOCK_LABELS: Record<string, string> = {
   captcha: "Капча",
   quiz: "Квиз",
   rules: "Правила",
+  media: "Медиа",
 };
 
 function newBlock(type: string): ScenarioBlock {
@@ -31,6 +34,9 @@ function newBlock(type: string): ScenarioBlock {
       type,
       config: { passScore: 100, questions: [] } as QuizConfig,
     };
+  }
+  if (type === "media") {
+    return { id: uid(), type, config: { kind: "image", url: "" } as MediaConfig };
   }
   return { id: uid(), type: "rules", config: { text: "" } as RulesConfig };
 }
@@ -94,6 +100,9 @@ export function ScenarioBuilder({
           {block.type === "rules" ? (
             <RulesEditor config={block.config as RulesConfig} onChange={(c) => setConfig(idx, c)} />
           ) : null}
+          {block.type === "media" ? (
+            <MediaEditor config={block.config as MediaConfig} onChange={(c) => setConfig(idx, c)} />
+          ) : null}
         </div>
       ))}
 
@@ -106,6 +115,9 @@ export function ScenarioBuilder({
         </Button>
         <Button small variant="secondary" onClick={() => onChange([...blocks, newBlock("rules")])}>
           + Правила
+        </Button>
+        <Button small variant="secondary" onClick={() => onChange([...blocks, newBlock("media")])}>
+          + Медиа
         </Button>
       </div>
     </div>
@@ -246,6 +258,41 @@ function RulesEditor({
         placeholder="Текст кнопки согласия (по умолчанию: Согласен)"
         value={config.agreeLabel ?? ""}
         onChange={(e) => onChange({ ...config, agreeLabel: e.target.value })}
+      />
+    </div>
+  );
+}
+
+function MediaEditor({
+  config,
+  onChange,
+}: {
+  config: MediaConfig;
+  onChange: (c: MediaConfig) => void;
+}) {
+  return (
+    <div className="col">
+      <label className="hint">Тип медиа</label>
+      <select
+        className="field"
+        value={config.kind}
+        onChange={(e) => onChange({ ...config, kind: e.target.value as MediaKind })}
+      >
+        <option value="image">Картинка</option>
+        <option value="video">Видео</option>
+        <option value="voice">Голосовое</option>
+      </select>
+      <input
+        className="field"
+        placeholder="Ссылка на медиа, https://..."
+        value={config.url}
+        onChange={(e) => onChange({ ...config, url: e.target.value })}
+      />
+      <input
+        className="field"
+        placeholder="Подпись (необязательно)"
+        value={config.caption ?? ""}
+        onChange={(e) => onChange({ ...config, caption: e.target.value })}
       />
     </div>
   );

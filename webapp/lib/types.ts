@@ -27,11 +27,19 @@ export interface RulesConfig {
   agreeLabel?: string;
 }
 
+export type MediaKind = "image" | "video" | "voice";
+
+export interface MediaConfig {
+  kind: MediaKind;
+  url: string;
+  caption?: string;
+}
+
 export interface ScenarioBlock {
   id: string;
   order?: number;
   type: BlockType;
-  config: CaptchaConfig | QuizConfig | RulesConfig | Record<string, unknown>;
+  config: CaptchaConfig | QuizConfig | RulesConfig | MediaConfig | Record<string, unknown>;
 }
 
 export interface ResultPolicy {

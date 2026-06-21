@@ -201,6 +201,9 @@ function evaluateBlock(
         mandatory: true,
       };
     }
+    case "media":
+      // Display-only block: never blocks the applicant.
+      return { blockId: block.id, type: block.type, passed: true, mandatory: false };
     default:
       // Unknown block type: do not block the applicant, but record it.
       logger.warn("unknown block type during evaluation", { type: block.type });

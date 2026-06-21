@@ -3,6 +3,7 @@
 import React from "react";
 import type {
   CaptchaConfig,
+  MediaConfig,
   QuizConfig,
   RulesConfig,
   ScenarioBlock,
@@ -88,6 +89,25 @@ export function BlockForm({
     );
   }
 
+  if (block.type === "media") {
+    const cfg = block.config as MediaConfig;
+    return (
+      <div className="col">
+        {cfg.kind === "image" ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="media-img" src={cfg.url} alt="" />
+        ) : null}
+        {cfg.kind === "video" ? (
+          <video className="media-video" src={cfg.url} controls playsInline />
+        ) : null}
+        {cfg.kind === "voice" ? (
+          <audio src={cfg.url} controls style={{ width: "100%" }} />
+        ) : null}
+        {cfg.caption ? <p style={{ margin: 0 }}>{cfg.caption}</p> : null}
+      </div>
+    );
+  }
+
   if (block.type === "rules") {
     const cfg = block.config as RulesConfig;
     const agreed = payload.agreed === true;
@@ -125,5 +145,6 @@ export function isBlockAnswered(block: ScenarioBlock, payload: Payload): boolean
     return (cfg.questions ?? []).every((q) => (selected[q.id] ?? []).length > 0);
   }
   if (block.type === "rules") return payload.agreed === true;
+  // media and unknown display blocks: nothing to answer
   return true;
 }
