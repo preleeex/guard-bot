@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { applyTheme, getWebApp } from "@/lib/telegram";
-import { Loading } from "@/components/ui";
+import { applyTheme, getWebApp, isInTelegram } from "@/lib/telegram";
+import { GIF } from "@/lib/assets";
+import { Loading, Message } from "@/components/ui";
 import { Screening } from "@/components/Screening";
 import { OwnerApp } from "@/components/Owner";
 
@@ -10,6 +11,7 @@ type Mode = "screening" | "owner";
 
 export default function Page() {
   const [ready, setReady] = useState(false);
+  const [inTelegram, setInTelegram] = useState(true);
   const [mode, setMode] = useState<Mode>("owner");
   const [sessionId, setSessionId] = useState<string | null>(null);
 
@@ -22,12 +24,18 @@ export default function Page() {
       wa.onEvent("themeChanged", applyTheme);
     }
 
+    if (!isInTelegram()) {
+      setInTelegram(false);
+      setReady(true);
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const startParam = wa?.initDataUnsafe?.start_param ?? "";
-    const urlMode = params.get("mode");
-    const session = params.get("session") || (startParam.startsWith("screening:") ? startParam.slice(10) : "");
+    const session =
+      params.get("session") || (startParam.startsWith("screening:") ? startParam.slice(10) : "");
 
-    if (urlMode === "screening" || session) {
+    if (params.get("mode") === "screening" || session) {
       setMode("screening");
       setSessionId(session || null);
     } else {
@@ -37,6 +45,15 @@ export default function Page() {
   }, []);
 
   if (!ready) return <Loading />;
+  if (!inTelegram) {
+    return (
+      <Message
+        title="Откройте через Telegram"
+        text="Это приложение работает только внутри Telegram."
+        gif={GIF.ban}
+      />
+    );
+  }
   if (mode === "screening") return <Screening sessionId={sessionId} />;
   return <OwnerApp />;
 }

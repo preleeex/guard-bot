@@ -55,6 +55,35 @@ export function getInitData(): string {
   return getWebApp()?.initData ?? "";
 }
 
+export interface TgProfile {
+  id: number;
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+  photoUrl?: string;
+}
+
+// Real Telegram profile (name, @username, avatar) from the validated initData.
+export function getProfile(): TgProfile | null {
+  const u = getWebApp()?.initDataUnsafe?.user as unknown as
+    | { id: number; username?: string; first_name?: string; last_name?: string; photo_url?: string }
+    | undefined;
+  if (!u) return null;
+  return {
+    id: u.id,
+    firstName: u.first_name,
+    lastName: u.last_name,
+    username: u.username,
+    photoUrl: u.photo_url,
+  };
+}
+
+// The app must be opened inside Telegram: a real WebApp context provides a
+// non-empty initData. In a plain browser it is empty.
+export function isInTelegram(): boolean {
+  return getInitData().length > 0;
+}
+
 // Open a payment/invoice URL. Telegram (t.me) links use openTelegramLink so the
 // Mini App can hand off without leaving Telegram.
 export function openExternal(url: string): void {

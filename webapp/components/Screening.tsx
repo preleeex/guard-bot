@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { getWebApp } from "@/lib/telegram";
+import { GIF } from "@/lib/assets";
 import type { ScenarioBlock } from "@/lib/types";
 import { Button, Card, Loading, Message } from "./ui";
 import { BlockForm, isBlockAnswered, type Payload } from "./BlockForm";
@@ -26,6 +27,7 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, Payload>>({});
   const [result, setResult] = useState<string>("");
+  const [decision, setDecision] = useState<string>("");
 
   useEffect(() => {
     if (!sessionId) {
@@ -63,6 +65,7 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
         const res = await api.post<{ decision: string }>(`/api/screening/${sessionId}/submit`, {
           answers: payload,
         });
+        setDecision(res.decision);
         setResult(decisionText[res.decision] ?? "Проверка завершена.");
         setState("done");
         setTimeout(() => getWebApp()?.close(), 2500);
@@ -75,8 +78,15 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
   );
 
   if (state === "loading") return <Loading text="Проверка" />;
-  if (state === "error") return <Message title="Проверка недоступна" text={error} />;
-  if (state === "done") return <Message title={result} text="Окно закроется автоматически." />;
+  if (state === "error") return <Message title="Проверка недоступна" text={error} gif={GIF.empty} />;
+  if (state === "done")
+    return (
+      <Message
+        title={result}
+        text="Окно закроется автоматически."
+        gif={decision === "decline" ? GIF.ban : undefined}
+      />
+    );
 
   if (blocks.length === 0) {
     // No scenario configured: nothing to do, submit immediately.

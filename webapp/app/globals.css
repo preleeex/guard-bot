@@ -167,6 +167,49 @@ textarea.field {
   background: var(--tg-secondary-bg);
 }
 
+.state-gif {
+  display: block;
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  margin: 8px auto;
+  border-radius: 14px;
+}
+
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--tg-secondary-bg);
+  flex: 0 0 auto;
+}
+
+.avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--tg-button-text);
+  background: var(--tg-button);
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.profile-name {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.icon-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .captcha-code {
   font-size: 34px;
   letter-spacing: 10px;

@@ -30,6 +30,12 @@ bot.command("start", async (ctx) => {
   await ctx.reply("Панель управления группами.", { reply_markup: keyboard });
 });
 
+// Utility: reply with the current chat id. Use it in the log group to learn the
+// correct SYSTEM_LOG_CHAT_ID, or in any chat to get its id.
+bot.command("chatid", async (ctx) => {
+  await ctx.reply(`chat_id: ${ctx.chat.id}\ntype: ${ctx.chat.type}`);
+});
+
 // Core: a user requested to join a guarded group.
 bot.on("chat_join_request", async (ctx) => {
   // `query_id` is a Bot API 10.1 field that the SDK may not type yet.

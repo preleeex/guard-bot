@@ -109,6 +109,30 @@ export async function handlePaidInvoice(invoice: CryptoPayInvoice): Promise<void
   });
 }
 
+// Poll Crypto Pay for the user's active invoices and credit any that are now
+// paid. This lets the purchase flow work even without a configured dashboard
+// webhook: the Mini App calls this after returning from the payment.
+export async function verifyUserInvoices(userId: bigint): Promise<number> {
+  const pending = await prisma.payment.findMany({
+    where: { userId, status: "active" },
+    select: { invoiceId: true },
+  });
+  const ids = pending.map((p) => p.invoiceId).filter((x): x is string => Boolean(x));
+  if (ids.length === 0) return 0;
+
+  const res = await cryptoPayCall<{ items: CryptoPayInvoice[] }>("getInvoices", {
+    invoice_ids: ids.join(","),
+  });
+  let credited = 0;
+  for (const inv of res.items ?? []) {
+    if (inv.status === "paid") {
+      await handlePaidInvoice(inv);
+      credited += 1;
+    }
+  }
+  return credited;
+}
+
 // Operator action: grant extra group slots to a user without payment.
 export async function grantManualSlots(
   targetUserId: bigint,

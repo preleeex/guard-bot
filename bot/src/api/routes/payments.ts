@@ -5,6 +5,7 @@ import {
   createBundleInvoice,
   verifyWebhookSignature,
   handlePaidInvoice,
+  verifyUserInvoices,
 } from "../../services/payments";
 
 // Authenticated routes: create an invoice for the current user.
@@ -18,6 +19,17 @@ paymentsRouter.post("/invoice", async (req, res) => {
   } catch (err) {
     logger.error("create invoice failed", { err: String(err) });
     res.status(500).json({ error: "payment_unavailable" });
+  }
+});
+
+// Poll Crypto Pay and credit any paid invoices for the current user.
+paymentsRouter.post("/verify", async (req, res) => {
+  try {
+    const credited = await verifyUserInvoices(req.tgUser!.id);
+    res.json({ credited });
+  } catch (err) {
+    logger.error("verify invoices failed", { err: String(err) });
+    res.status(500).json({ error: "verify_failed" });
   }
 });
 
