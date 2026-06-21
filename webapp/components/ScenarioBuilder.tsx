@@ -1,0 +1,247 @@
+"use client";
+
+import type {
+  CaptchaConfig,
+  CaptchaKind,
+  QuizConfig,
+  QuizQuestion,
+  RulesConfig,
+  ScenarioBlock,
+} from "@/lib/types";
+import { Button } from "./ui";
+
+function uid(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+const BLOCK_LABELS: Record<string, string> = {
+  captcha: "Капча",
+  quiz: "Квиз",
+  rules: "Правила",
+};
+
+function newBlock(type: string): ScenarioBlock {
+  if (type === "captcha") {
+    return { id: uid(), type, config: { kind: "math" } as CaptchaConfig };
+  }
+  if (type === "quiz") {
+    return {
+      id: uid(),
+      type,
+      config: { passScore: 100, questions: [] } as QuizConfig,
+    };
+  }
+  return { id: uid(), type: "rules", config: { text: "" } as RulesConfig };
+}
+
+// The no-code scenario constructor. Add, edit, reorder and delete blocks of any
+// type and in any number. New block types only need a new editor branch here.
+export function ScenarioBuilder({
+  blocks,
+  onChange,
+}: {
+  blocks: ScenarioBlock[];
+  onChange: (blocks: ScenarioBlock[]) => void;
+}) {
+  const update = (idx: number, patch: Partial<ScenarioBlock>) => {
+    onChange(blocks.map((b, i) => (i === idx ? { ...b, ...patch } : b)));
+  };
+  const setConfig = (idx: number, config: ScenarioBlock["config"]) => update(idx, { config });
+  const remove = (idx: number) => onChange(blocks.filter((_, i) => i !== idx));
+  const move = (idx: number, dir: -1 | 1) => {
+    const j = idx + dir;
+    if (j < 0 || j >= blocks.length) return;
+    const next = blocks.slice();
+    [next[idx], next[j]] = [next[j], next[idx]];
+    onChange(next);
+  };
+
+  return (
+    <div className="col">
+      {blocks.map((block, idx) => (
+        <div className="card" key={block.id}>
+          <div className="row">
+            <p className="subtitle">
+              {idx + 1}. {BLOCK_LABELS[block.type] ?? block.type}
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button small variant="secondary" onClick={() => move(idx, -1)}>
+                Вверх
+              </Button>
+              <Button small variant="secondary" onClick={() => move(idx, 1)}>
+                Вниз
+              </Button>
+              <Button small variant="danger" onClick={() => remove(idx)}>
+                Удалить
+              </Button>
+            </div>
+          </div>
+
+          {block.type === "captcha" ? (
+            <CaptchaEditor
+              config={block.config as CaptchaConfig}
+              onChange={(c) => setConfig(idx, c)}
+            />
+          ) : null}
+          {block.type === "quiz" ? (
+            <QuizEditor config={block.config as QuizConfig} onChange={(c) => setConfig(idx, c)} />
+          ) : null}
+          {block.type === "rules" ? (
+            <RulesEditor config={block.config as RulesConfig} onChange={(c) => setConfig(idx, c)} />
+          ) : null}
+        </div>
+      ))}
+
+      <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+        <Button small variant="secondary" onClick={() => onChange([...blocks, newBlock("captcha")])}>
+          + Капча
+        </Button>
+        <Button small variant="secondary" onClick={() => onChange([...blocks, newBlock("quiz")])}>
+          + Квиз
+        </Button>
+        <Button small variant="secondary" onClick={() => onChange([...blocks, newBlock("rules")])}>
+          + Правила
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CaptchaEditor({
+  config,
+  onChange,
+}: {
+  config: CaptchaConfig;
+  onChange: (c: CaptchaConfig) => void;
+}) {
+  return (
+    <div className="col">
+      <label className="hint">Тип капчи</label>
+      <select
+        className="field"
+        value={config.kind}
+        onChange={(e) => onChange({ ...config, kind: e.target.value as CaptchaKind })}
+      >
+        <option value="math">Математическая</option>
+        <option value="visual">Визуальная (код)</option>
+        <option value="button">Кнопочная</option>
+      </select>
+      {config.kind === "button" ? (
+        <input
+          className="field"
+          placeholder="Текст кнопки (по умолчанию: Я не робот)"
+          value={config.buttonLabel ?? ""}
+          onChange={(e) => onChange({ ...config, buttonLabel: e.target.value })}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function QuizEditor({
+  config,
+  onChange,
+}: {
+  config: QuizConfig;
+  onChange: (c: QuizConfig) => void;
+}) {
+  const questions = config.questions ?? [];
+  const setQuestions = (qs: QuizQuestion[]) => onChange({ ...config, questions: qs });
+  const updateQ = (qi: number, patch: Partial<QuizQuestion>) =>
+    setQuestions(questions.map((q, i) => (i === qi ? { ...q, ...patch } : q)));
+
+  return (
+    <div className="col">
+      <label className="hint">Проходной балл, %</label>
+      <input
+        className="field"
+        inputMode="numeric"
+        value={String(config.passScore ?? 100)}
+        onChange={(e) =>
+          onChange({ ...config, passScore: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })
+        }
+      />
+      {questions.map((q, qi) => (
+        <div className="card" key={q.id}>
+          <input
+            className="field"
+            placeholder="Текст вопроса"
+            value={q.text}
+            onChange={(e) => updateQ(qi, { text: e.target.value })}
+          />
+          {q.options.map((opt, oi) => {
+            const correct = q.correct ?? [];
+            const isCorrect = correct.includes(oi);
+            return (
+              <div className="row" key={oi}>
+                <input
+                  className="field"
+                  placeholder={`Вариант ${oi + 1}`}
+                  value={opt}
+                  onChange={(e) =>
+                    updateQ(qi, {
+                      options: q.options.map((o, i) => (i === oi ? e.target.value : o)),
+                    })
+                  }
+                />
+                <Button
+                  small
+                  variant={isCorrect ? "primary" : "secondary"}
+                  onClick={() =>
+                    updateQ(qi, {
+                      correct: isCorrect ? correct.filter((c) => c !== oi) : [...correct, oi],
+                    })
+                  }
+                >
+                  {isCorrect ? "Верный" : "Неверный"}
+                </Button>
+              </div>
+            );
+          })}
+          <Button
+            small
+            variant="secondary"
+            onClick={() => updateQ(qi, { options: [...q.options, ""] })}
+          >
+            + Вариант
+          </Button>
+          <Button small variant="danger" onClick={() => setQuestions(questions.filter((_, i) => i !== qi))}>
+            Удалить вопрос
+          </Button>
+        </div>
+      ))}
+      <Button
+        small
+        variant="secondary"
+        onClick={() => setQuestions([...questions, { id: uid(), text: "", options: ["", ""], correct: [] }])}
+      >
+        + Вопрос
+      </Button>
+    </div>
+  );
+}
+
+function RulesEditor({
+  config,
+  onChange,
+}: {
+  config: RulesConfig;
+  onChange: (c: RulesConfig) => void;
+}) {
+  return (
+    <div className="col">
+      <textarea
+        className="field"
+        placeholder="Текст правил"
+        value={config.text}
+        onChange={(e) => onChange({ ...config, text: e.target.value })}
+      />
+      <input
+        className="field"
+        placeholder="Текст кнопки согласия (по умолчанию: Согласен)"
+        value={config.agreeLabel ?? ""}
+        onChange={(e) => onChange({ ...config, agreeLabel: e.target.value })}
+      />
+    </div>
+  );
+}

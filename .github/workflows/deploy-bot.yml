@@ -1,0 +1,23 @@
+name: Deploy Bot (DigitalOcean App Platform)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bot/**"
+      - ".github/workflows/deploy-bot.yml"
+
+# Required repo secrets:
+#   DIGITALOCEAN_ACCESS_TOKEN  DigitalOcean API token
+#   DIGITALOCEAN_APP_ID        App Platform app id (after first creation)
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      # Trigger a new deployment of the existing app. App Platform rebuilds the
+      # bot/ Dockerfile, runs prisma migrate deploy, then starts the server.
+      - run: doctl apps create-deployment ${{ secrets.DIGITALOCEAN_APP_ID }} --wait

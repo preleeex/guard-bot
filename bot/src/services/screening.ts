@@ -1,0 +1,368 @@
+import { Prisma } from "@prisma/client";
+import { prisma } from "../db";
+import { config } from "../config";
+import { logger } from "../logger";
+import {
+  answerChatJoinRequestQuery,
+  approveChatJoinRequest,
+  declineChatJoinRequest,
+  type JoinDecision,
+} from "../telegram/api";
+import { getScenario } from "./scenarios";
+import { addJournalEntry } from "./journal";
+import type {
+  BlockAnswer,
+  CaptchaConfig,
+  Decision,
+  QuizConfig,
+  ResultPolicy,
+  ScenarioBlockDTO,
+} from "../types/scenario";
+
+// --- session creation ------------------------------------------------------
+
+interface CreateSessionInput {
+  chatId: bigint;
+  applicantUserId: bigint;
+  applicantUsername?: string | null;
+  applicantName?: string | null;
+  queryId?: string | null;
+  mode: "query" | "legacy";
+  timeoutSeconds: number;
+}
+
+// Generate server-side secrets for verifiable blocks. Kept out of the public
+// scenario the applicant receives.
+function buildChallenge(blocks: ScenarioBlockDTO[]): Record<string, unknown> {
+  const challenge: Record<string, unknown> = {};
+  for (const block of blocks) {
+    if (block.type !== "captcha") continue;
+    const cfg = block.config as CaptchaConfig;
+    if (cfg.kind === "math") {
+      const a = 1 + Math.floor(Math.random() * 9);
+      const b = 1 + Math.floor(Math.random() * 9);
+      challenge[block.id] = { prompt: `${a} + ${b}`, expected: a + b };
+    } else if (cfg.kind === "visual") {
+      const code = Math.random().toString(36).slice(2, 7).toUpperCase();
+      challenge[block.id] = { code };
+    }
+    // button captcha needs no secret
+  }
+  return challenge;
+}
+
+export async function createScreeningSession(input: CreateSessionInput) {
+  const blocks = await getScenario(input.chatId);
+  const challenge = buildChallenge(blocks);
+  const expiresAt = new Date(Date.now() + input.timeoutSeconds * 1000);
+
+  return prisma.screeningSession.create({
+    data: {
+      chatId: input.chatId,
+      applicantUserId: input.applicantUserId,
+      applicantUsername: input.applicantUsername ?? null,
+      applicantName: input.applicantName ?? null,
+      queryId: input.queryId ?? null,
+      mode: input.mode,
+      challenge: challenge as Prisma.InputJsonValue,
+      expiresAt,
+    },
+  });
+}
+
+// Build the Mini App URL the applicant opens for a session.
+export function screeningUrl(sessionId: string): string {
+  return `${config.miniAppUrl}/?mode=screening&session=${encodeURIComponent(sessionId)}`;
+}
+
+// --- public scenario (applicant-facing, secrets stripped) ------------------
+
+export async function getPublicScenario(sessionId: string, applicantUserId: bigint) {
+  const session = await prisma.screeningSession.findUnique({ where: { id: sessionId } });
+  if (!session) throw new ScreeningError("not_found", "Сессия не найдена.");
+  if (session.applicantUserId !== applicantUserId) {
+    throw new ScreeningError("forbidden", "Эта проверка предназначена другому пользователю.");
+  }
+  if (session.status !== "pending") {
+    throw new ScreeningError("closed", "Проверка уже завершена.");
+  }
+  if (session.expiresAt.getTime() < Date.now()) {
+    throw new ScreeningError("expired", "Время на проверку истекло.");
+  }
+
+  const blocks = await getScenario(session.chatId);
+  const challenge = session.challenge as unknown as Record<string, { prompt?: string; code?: string }>;
+
+  const publicBlocks = blocks.map((block) => {
+    if (block.type === "quiz") {
+      const cfg = block.config as QuizConfig;
+      // strip correct answers
+      return {
+        id: block.id,
+        type: block.type,
+        config: {
+          passScore: cfg.passScore,
+          questions: (cfg.questions ?? []).map((q) => ({
+            id: q.id,
+            text: q.text,
+            options: q.options,
+          })),
+        },
+      };
+    }
+    if (block.type === "captcha") {
+      const cfg = block.config as CaptchaConfig;
+      const ch = challenge[block.id];
+      return {
+        id: block.id,
+        type: block.type,
+        config: {
+          kind: cfg.kind,
+          prompt: ch?.prompt ?? cfg.prompt,
+          code: ch?.code, // visual captcha: text to render distorted
+          buttonLabel: cfg.buttonLabel,
+        },
+      };
+    }
+    // rules and unknown types: pass config through as-is
+    return { id: block.id, type: block.type, config: block.config };
+  });
+
+  return {
+    sessionId: session.id,
+    expiresAt: session.expiresAt,
+    blocks: publicBlocks,
+  };
+}
+
+// --- evaluation ------------------------------------------------------------
+
+interface BlockResult {
+  blockId: string;
+  type: string;
+  passed: boolean;
+  mandatory: boolean;
+  score?: number; // quiz only, 0..100
+}
+
+function evaluateBlock(
+  block: ScenarioBlockDTO,
+  answer: BlockAnswer | undefined,
+  challenge: Record<string, { expected?: number; code?: string }>
+): BlockResult {
+  switch (block.type) {
+    case "captcha": {
+      const cfg = block.config as CaptchaConfig;
+      const ch = challenge[block.id] ?? {};
+      let passed = false;
+      if (cfg.kind === "math") {
+        passed = Number(answer?.payload?.value) === ch.expected;
+      } else if (cfg.kind === "visual") {
+        passed =
+          String(answer?.payload?.value ?? "").trim().toUpperCase() ===
+          String(ch.code ?? "").toUpperCase();
+      } else {
+        passed = answer?.payload?.pressed === true;
+      }
+      return { blockId: block.id, type: block.type, passed, mandatory: true };
+    }
+    case "quiz": {
+      const cfg = block.config as QuizConfig;
+      const selected = (answer?.payload?.selected ?? {}) as Record<string, number[]>;
+      const questions = cfg.questions ?? [];
+      let correct = 0;
+      for (const q of questions) {
+        const picked = (selected[q.id] ?? []).slice().sort();
+        const truth = (q.correct ?? []).slice().sort();
+        if (
+          picked.length === truth.length &&
+          picked.every((v, i) => v === truth[i])
+        ) {
+          correct += 1;
+        }
+      }
+      const score = questions.length === 0 ? 100 : Math.round((correct / questions.length) * 100);
+      return {
+        blockId: block.id,
+        type: block.type,
+        passed: score >= (cfg.passScore ?? 0),
+        mandatory: true,
+        score,
+      };
+    }
+    case "rules": {
+      return {
+        blockId: block.id,
+        type: block.type,
+        passed: answer?.payload?.agreed === true,
+        mandatory: true,
+      };
+    }
+    default:
+      // Unknown block type: do not block the applicant, but record it.
+      logger.warn("unknown block type during evaluation", { type: block.type });
+      return { blockId: block.id, type: block.type, passed: true, mandatory: false };
+  }
+}
+
+function decide(
+  results: BlockResult[],
+  policy: ResultPolicy
+): { decision: Decision; score: number; reason: string } {
+  const mandatoryFailed = results.some((r) => r.mandatory && !r.passed);
+  const quizScores = results.filter((r) => typeof r.score === "number").map((r) => r.score!);
+  const score = quizScores.length
+    ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScores.length)
+    : mandatoryFailed
+    ? 0
+    : 100;
+
+  if (mandatoryFailed) {
+    return {
+      decision: policy.failDecline ? "decline" : "queue",
+      score,
+      reason: "Не пройден обязательный блок.",
+    };
+  }
+
+  if (policy.queueThreshold != null) {
+    if (score >= policy.queueThreshold) {
+      return {
+        decision: policy.passApprove ? "approve" : "queue",
+        score,
+        reason: `Результат ${score}, порог ${policy.queueThreshold}.`,
+      };
+    }
+    return { decision: "queue", score, reason: `Результат ${score} ниже порога ${policy.queueThreshold}.` };
+  }
+
+  return {
+    decision: policy.passApprove ? "approve" : "queue",
+    score,
+    reason: "Сценарий пройден.",
+  };
+}
+
+// --- applying a decision through Telegram ----------------------------------
+
+export async function applyJoinDecision(
+  session: { mode: string; queryId: string | null; chatId: bigint; applicantUserId: bigint },
+  decision: Decision
+): Promise<void> {
+  if (session.mode === "query" && session.queryId) {
+    await answerChatJoinRequestQuery(session.queryId, decision as JoinDecision);
+    return;
+  }
+  // legacy mode
+  if (decision === "approve") {
+    await approveChatJoinRequest(session.chatId, session.applicantUserId);
+  } else if (decision === "decline") {
+    await declineChatJoinRequest(session.chatId, session.applicantUserId);
+  }
+  // queue in legacy mode: leave the request pending for manual review
+}
+
+// --- submit (applicant finished the Mini App) ------------------------------
+
+export async function submitScreening(
+  sessionId: string,
+  applicantUserId: bigint,
+  answers: BlockAnswer[]
+): Promise<{ decision: Decision; score: number; reason: string }> {
+  const session = await prisma.screeningSession.findUnique({ where: { id: sessionId } });
+  if (!session) throw new ScreeningError("not_found", "Сессия не найдена.");
+  if (session.applicantUserId !== applicantUserId) {
+    throw new ScreeningError("forbidden", "Эта проверка предназначена другому пользователю.");
+  }
+  if (session.status !== "pending") {
+    throw new ScreeningError("closed", "Проверка уже завершена.");
+  }
+
+  const group = await prisma.group.findUnique({ where: { chatId: session.chatId } });
+  if (!group) throw new ScreeningError("not_found", "Группа не найдена.");
+
+  const blocks = await getScenario(session.chatId);
+  const challenge = session.challenge as unknown as Record<string, { expected?: number; code?: string }>;
+  const answersByBlock = new Map(answers.map((a) => [a.blockId, a]));
+
+  const results = blocks.map((b) => evaluateBlock(b, answersByBlock.get(b.id), challenge));
+  const policy = group.resultPolicy as unknown as ResultPolicy;
+  const { decision, score, reason } = decide(results, policy);
+
+  // Mark the session completed before the external call to avoid double-submit.
+  await prisma.screeningSession.update({
+    where: { id: sessionId },
+    data: { status: "completed" },
+  });
+
+  try {
+    await applyJoinDecision(session, decision);
+  } catch (err) {
+    logger.error("failed to apply join decision", { sessionId, err: String(err) });
+    // The journal still records the intended decision; the timeout job and
+    // manual review remain available as a safety net.
+  }
+
+  await addJournalEntry({
+    chatId: session.chatId,
+    applicantUserId: session.applicantUserId,
+    applicantUsername: session.applicantUsername,
+    applicantName: session.applicantName,
+    decision,
+    reason,
+    score,
+    answers,
+    startedAt: session.createdAt,
+  });
+
+  return { decision, score, reason };
+}
+
+// --- timeout handling ------------------------------------------------------
+
+// Expire all pending sessions past their deadline and apply the group's
+// configured timeout action (queue or decline).
+export async function expireDueSessions(): Promise<number> {
+  const due = await prisma.screeningSession.findMany({
+    where: { status: "pending", expiresAt: { lt: new Date() } },
+    take: 200,
+  });
+
+  let handled = 0;
+  for (const session of due) {
+    const group = await prisma.group.findUnique({ where: { chatId: session.chatId } });
+    const action = (group?.timeoutAction as "queue" | "decline") ?? "queue";
+    const decision: Decision = action === "decline" ? "decline" : "queue";
+
+    await prisma.screeningSession.update({
+      where: { id: session.id },
+      data: { status: "expired" },
+    });
+
+    try {
+      await applyJoinDecision(session, decision);
+    } catch (err) {
+      logger.error("failed to apply timeout decision", { id: session.id, err: String(err) });
+    }
+
+    await addJournalEntry({
+      chatId: session.chatId,
+      applicantUserId: session.applicantUserId,
+      applicantUsername: session.applicantUsername,
+      applicantName: session.applicantName,
+      decision: "timeout",
+      reason: `Таймаут, действие: ${decision}.`,
+      answers: [],
+      startedAt: session.createdAt,
+    });
+    handled += 1;
+  }
+  return handled;
+}
+
+export class ScreeningError extends Error {
+  constructor(public code: string, message: string) {
+    super(message);
+    this.name = "ScreeningError";
+  }
+}

@@ -1,0 +1,138 @@
+// Prisma schema for the Telegram Guard Bot.
+// Multi-tenant: many owners, each with many groups, each group with its own
+// screening scenario, quota accounting, payments and a per-request journal.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// A Telegram user who has interacted with the bot (pressed /start) and/or owns
+// groups. `manualExtraSlots` is granted by the bot operator without payment.
+model User {
+  id               BigInt   @id // Telegram user id
+  username         String?
+  firstName        String?
+  startedAt        DateTime @default(now())
+  manualExtraSlots Int      @default(0)
+
+  ownedGroups Group[]
+  payments    Payment[]
+
+  @@map("users")
+}
+
+// A Telegram group/supergroup the bot guards. The chatId -> ownerUserId binding
+// is created on first connect and never changes automatically (anti-abuse: one
+// group cannot occupy multiple free slots by switching owner accounts).
+model Group {
+  chatId      BigInt   @id // Telegram chat id
+  ownerUserId BigInt // permanent binding, set on first connect
+  title       String?
+  guardEnabled Boolean @default(false)
+  connectedAt DateTime @default(now())
+  removedAt   DateTime? // set when the bot is removed from the group
+
+  // Result policy: how a finished screening maps to a decision.
+  // {"passApprove": true, "failDecline": true, "queueThreshold": <0..100|null>}
+  resultPolicy Json @default("{\"passApprove\":true,\"failDecline\":true,\"queueThreshold\":null}")
+
+  // Timeout for the applicant to finish the Mini App flow.
+  timeoutSeconds Int    @default(600)
+  timeoutAction  String @default("queue") // "queue" | "decline"
+
+  owner   User            @relation(fields: [ownerUserId], references: [id])
+  blocks  ScenarioBlock[]
+  journal JournalEntry[]
+  sessions ScreeningSession[]
+
+  @@index([ownerUserId])
+  @@map("groups")
+}
+
+// One configurable step of a screening scenario. `type` is an open string
+// ("captcha" | "quiz" | "rules" | future types); `config` holds type-specific
+// settings so new block types can be added without a schema change.
+model ScenarioBlock {
+  id     String @id @default(cuid())
+  chatId BigInt
+  order  Int
+  type   String
+  config Json   @default("{}")
+
+  group Group @relation(fields: [chatId], references: [chatId], onDelete: Cascade)
+
+  @@index([chatId, order])
+  @@map("scenario_blocks")
+}
+
+// A purchase of group slots via Crypto Pay. Each paid bundle adds `slotsAdded`.
+model Payment {
+  id         String   @id @default(cuid())
+  userId     BigInt
+  invoiceId  String?  @unique // Crypto Pay invoice id
+  status     String   @default("active") // "active" | "paid" | "expired"
+  amount     String // store as string to avoid float issues
+  currency   String   @default("USD")
+  asset      String? // crypto asset actually paid, if any
+  slotsAdded Int      @default(3)
+  createdAt  DateTime @default(now())
+  paidAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("payments")
+}
+
+// In-flight screening for a single join request. Maps a join request (query or
+// legacy) to the applicant and tracks progress/expiry until a decision is made.
+model ScreeningSession {
+  id                String   @id @default(cuid())
+  chatId            BigInt
+  applicantUserId   BigInt
+  applicantUsername String?
+  applicantName     String?
+  queryId           String?  @unique // present in query mode only
+  mode              String   @default("query") // "query" | "legacy"
+  status            String   @default("pending") // "pending" | "completed" | "expired"
+  // Server-generated secrets for verifiable blocks (e.g. captcha expected
+  // answers), keyed by blockId. Never sent to the applicant.
+  challenge         Json     @default("{}")
+  createdAt         DateTime @default(now())
+  expiresAt         DateTime
+
+  group Group @relation(fields: [chatId], references: [chatId], onDelete: Cascade)
+
+  @@index([chatId])
+  @@index([status, expiresAt])
+  @@map("screening_sessions")
+}
+
+// Per-request audit record. Never sent to Telegram chats; shown to the group
+// owner inside the Mini App "Journal" section.
+model JournalEntry {
+  id                String   @id @default(cuid())
+  chatId            BigInt
+  applicantUserId   BigInt
+  applicantUsername String?
+  applicantName     String?
+  decision          String // "approve" | "decline" | "queue" | "timeout"
+  reason            String?
+  score             Int? // 0..100 when a quiz contributed
+  answers           Json   @default("[]") // per-block answers snapshot
+  startedAt         DateTime
+  finishedAt        DateTime @default(now())
+
+  group Group @relation(fields: [chatId], references: [chatId], onDelete: Cascade)
+
+  @@index([chatId, finishedAt])
+  @@map("journal_entries")
+}
+
+// System-wide counters that are cheap to read for the admin view are derived by
+// aggregation queries, so no extra table is needed here.

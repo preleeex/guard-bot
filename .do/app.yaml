@@ -1,0 +1,61 @@
+# DigitalOcean App Platform spec for the backend.
+# Create once with:
+#   doctl apps create --spec .do/app.yaml
+# Then store the returned app id as the DIGITALOCEAN_APP_ID GitHub secret.
+#
+# Replace GITHUB_OWNER/REPO and set the env values in the App Platform UI or
+# via `doctl apps update`. Secrets should be set as encrypted (type: SECRET).
+
+name: guard-bot
+region: fra
+
+services:
+  - name: backend
+    dockerfile_path: bot/Dockerfile
+    source_dir: bot
+    github:
+      repo: GITHUB_OWNER/REPO
+      branch: main
+      deploy_on_push: true
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /healthz
+    envs:
+      - key: BOT_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: BOT_USERNAME
+        scope: RUN_TIME
+      - key: OWNER_USER_ID
+        scope: RUN_TIME
+        value: "7210276147"
+      - key: SYSTEM_LOG_CHAT_ID
+        scope: RUN_TIME
+        value: "3275669277"
+      - key: WEBHOOK_SECRET_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: PUBLIC_BASE_URL
+        scope: RUN_TIME
+      - key: MINI_APP_URL
+        scope: RUN_TIME
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: CRYPTO_PAY_API_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: CRYPTO_PAY_API_BASE
+        scope: RUN_TIME
+        value: "https://pay.crypt.bot/api"
+      - key: PORT
+        scope: RUN_TIME
+        value: "8080"
+
+databases:
+  - name: guard-db
+    engine: PG
+    version: "16"
+    production: false
