@@ -13,11 +13,11 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npx prisma generate && npm run build
 
-# Drop dev dependencies for the runtime image.
-RUN npm prune --omit=dev
+# Keep dev dependencies: the Prisma CLI is needed at boot to sync the schema.
 
 ENV NODE_ENV=production
 EXPOSE 8080
 
-# Apply migrations on boot, then start.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+# Sync the schema to the database on boot (creates tables on first run), then
+# start. Switch to `prisma migrate deploy` once migration files are committed.
+CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/index.js"]
