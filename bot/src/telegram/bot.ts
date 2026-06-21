@@ -23,6 +23,26 @@ bot.command("start", async (ctx) => {
     await sendSystemLog({ kind: "user_started", userId, username: from.username ?? null });
   }
 
+  // Deep link: /start verify_<sessionId> resumes a pending screening so the
+  // applicant can reach the Mini App even without an open DM beforehand.
+  const payload = typeof ctx.match === "string" ? ctx.match.trim() : "";
+  if (payload.startsWith("verify_")) {
+    const sessionId = payload.slice("verify_".length);
+    const session = await prisma.screeningSession.findUnique({ where: { id: sessionId } });
+    if (
+      session &&
+      session.applicantUserId === userId &&
+      session.status === "pending" &&
+      session.expiresAt.getTime() > Date.now()
+    ) {
+      const kb = new InlineKeyboard().webApp("Пройти проверку", screeningUrl(sessionId));
+      await ctx.reply("Проверка для вступления в группу.", { reply_markup: kb });
+      return;
+    }
+    await ctx.reply("Проверка не найдена или уже завершена.");
+    return;
+  }
+
   const keyboard = new InlineKeyboard().webApp(
     "Открыть панель",
     `${config.miniAppUrl}/?mode=owner`
@@ -47,6 +67,15 @@ bot.on("chat_join_request", async (ctx) => {
   const queryId = update.query_id;
 
   const group = await prisma.group.findUnique({ where: { chatId } });
+
+  logger.info("chat_join_request received", {
+    chatId: chatId.toString(),
+    applicant: applicant.id,
+    hasQueryId: Boolean(queryId),
+    groupFound: Boolean(group),
+    guardEnabled: group?.guardEnabled ?? false,
+    removed: Boolean(group?.removedAt),
+  });
 
   // Not configured or guard disabled: hand the request back to humans.
   if (!group || group.removedAt || !group.guardEnabled) {
@@ -81,6 +110,8 @@ bot.on("chat_join_request", async (ctx) => {
       logger.error("sendChatJoinRequestWebApp failed; session will time out", {
         sessionId: session.id,
       });
+    } else {
+      logger.info("shown Mini App via query mode", { sessionId: session.id });
     }
     return;
   }
