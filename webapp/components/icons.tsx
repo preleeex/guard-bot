@@ -83,3 +83,37 @@ export function CoinIcon({ size = 20, ...rest }: IconProps) {
     </svg>
   );
 }
+
+export function ArrowUpIcon({ size = 20, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, rest)}>
+      <path d="M12 19V5M6 11l6-6 6 6" />
+    </svg>
+  );
+}
+
+export function ArrowDownIcon({ size = 20, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, rest)}>
+      <path d="M12 5v14M6 13l6 6 6-6" />
+    </svg>
+  );
+}
+
+export function TrashIcon({ size = 20, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, rest)}>
+      <path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" />
+    </svg>
+  );
+}
+
+export function GroupAddIcon({ size = 20, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, rest)}>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 20c0-3 3-5 6-5s6 2 6 5" />
+      <path d="M18 7v6M21 10h-6" />
+    </svg>
+  );
+}

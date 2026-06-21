@@ -176,6 +176,81 @@ textarea.field {
   border-radius: 14px;
 }
 
+/* Loading: custom animated progress bar */
+.loading-wrap {
+  min-height: 60vh;
+  justify-content: center;
+  align-items: center;
+}
+
+.progress {
+  width: 70%;
+  max-width: 240px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tg-secondary-bg);
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar {
+  position: absolute;
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: var(--tg-button);
+  animation: progress-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+
+/* Centered section header with icon */
+.section-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--tg-secondary-bg);
+  color: var(--tg-button);
+}
+
+/* Square icon button for compact actions */
+.icon-btn {
+  appearance: none;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: var(--tg-secondary-bg);
+  color: var(--tg-text);
+  flex: 0 0 auto;
+}
+
+.icon-btn.danger {
+  color: var(--tg-destructive);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+}
+
 .avatar {
   border-radius: 50%;
   object-fit: cover;
@@ -198,10 +273,64 @@ textarea.field {
   gap: 12px;
 }
 
+.profile-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
 .profile-name {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   margin: 0;
+}
+
+.big-number {
+  font-size: 30px;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* Tappable row in a list (e.g. a group) */
+.list-item {
+  appearance: none;
+  border: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--tg-secondary-bg);
+  color: var(--tg-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.list-item-icon {
+  display: flex;
+  color: var(--tg-button);
+}
+
+.list-item-title {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.field.center {
+  text-align: center;
 }
 
 .icon-row {

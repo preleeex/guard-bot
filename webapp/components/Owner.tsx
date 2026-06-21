@@ -1,28 +1,81 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { openExternal, getProfile } from "@/lib/telegram";
-import { GIF } from "@/lib/assets";
+import { ADD_TO_GROUP_LINK } from "@/lib/config";
 import type { Group, QuotaStatus } from "@/lib/types";
-import { Avatar, Button, Card, Loading, StateGif } from "./ui";
-import { UsersIcon, PlusIcon, CoinIcon, StarIcon, ShieldIcon } from "./icons";
+import { Avatar, Button, Card, ErrorState, Loading, SectionHeader } from "./ui";
+import { UsersIcon, PlusIcon, CoinIcon, StarIcon, ShieldIcon, GroupAddIcon } from "./icons";
 import { GroupDetail } from "./GroupDetail";
 import { Admin } from "./Admin";
 
 type View = { name: "home" } | { name: "group"; chatId: string } | { name: "admin" };
 
+interface HomeData {
+  isOperator: boolean;
+  quota: QuotaStatus;
+  groups: Group[];
+}
+
 export function OwnerApp() {
   const [view, setView] = useState<View>({ name: "home" });
+  const [data, setData] = useState<HomeData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      setData(await api.get<HomeData>("/api/owner/home"));
+    } catch (e) {
+      setError((e as ApiError).message || "Не удалось загрузить.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    // Credit any already-paid invoice in the background.
+    api
+      .post<{ credited: number }>("/api/payments/verify")
+      .then((r) => {
+        if (r.credited > 0) load();
+      })
+      .catch(() => undefined);
+  }, [load]);
+
+  if (loading && !data) return <Loading />;
+  if (error && !data)
+    return (
+      <ErrorState
+        text={error}
+        onRetry={() => {
+          setLoading(true);
+          load();
+        }}
+      />
+    );
 
   if (view.name === "group") {
-    return <GroupDetail chatId={view.chatId} onBack={() => setView({ name: "home" })} />;
+    return (
+      <GroupDetail
+        chatId={view.chatId}
+        onBack={() => {
+          setView({ name: "home" });
+          load();
+        }}
+      />
+    );
   }
   if (view.name === "admin") {
     return <Admin onBack={() => setView({ name: "home" })} />;
   }
   return (
     <Home
+      data={data!}
+      reload={load}
       onOpenGroup={(chatId) => setView({ name: "group", chatId })}
       onOpenAdmin={() => setView({ name: "admin" })}
     />
@@ -30,50 +83,26 @@ export function OwnerApp() {
 }
 
 function Home({
+  data,
+  reload,
   onOpenGroup,
   onOpenAdmin,
 }: {
+  data: HomeData;
+  reload: () => Promise<void>;
   onOpenGroup: (chatId: string) => void;
   onOpenAdmin: () => void;
 }) {
-  const [loading, setLoading] = useState(true);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [quota, setQuota] = useState<QuotaStatus | null>(null);
-  const [isOperator, setIsOperator] = useState(false);
+  const { quota, groups, isOperator } = data;
+  const profile = getProfile();
+  const profileName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
+
   const [chat, setChat] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
   const [buying, setBuying] = useState(false);
-  const [awaitingPayment, setAwaitingPayment] = useState(false);
+  const [awaiting, setAwaiting] = useState(false);
   const [checking, setChecking] = useState(false);
-  const profile = getProfile();
-
-  const load = async () => {
-    const [g, q, me] = await Promise.all([
-      api.get<{ groups: Group[] }>("/api/owner/groups"),
-      api.get<QuotaStatus>("/api/owner/quota"),
-      api.get<{ isOperator: boolean }>("/api/owner/me"),
-    ]);
-    setGroups(g.groups);
-    setQuota(q);
-    setIsOperator(me.isOperator);
-  };
-
-  useEffect(() => {
-    // Render immediately; credit any already-paid invoice in the background and
-    // refresh only if something changed.
-    load().finally(() => setLoading(false));
-    api
-      .post<{ credited: number }>("/api/payments/verify")
-      .then((r) => {
-        if (r.credited > 0) load();
-      })
-      .catch(() => undefined);
-  }, []);
-
-  if (loading || !quota) return <Loading />;
-
-  const profileName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
 
   const addGroup = async () => {
     setAdding(true);
@@ -81,7 +110,7 @@ function Home({
     try {
       await api.post("/api/owner/groups", { chat: chat.trim() });
       setChat("");
-      await load();
+      await reload();
     } catch (e) {
       setError((e as ApiError).message || "Не удалось добавить группу.");
     } finally {
@@ -96,7 +125,7 @@ function Home({
       const res = await api.post<{ payUrl: string }>("/api/payments/invoice");
       if (res.payUrl) {
         openExternal(res.payUrl);
-        setAwaitingPayment(true);
+        setAwaiting(true);
       }
     } catch (e) {
       setError((e as ApiError).message || "Оплата недоступна.");
@@ -107,13 +136,10 @@ function Home({
 
   const checkPayment = async () => {
     setChecking(true);
-    setError("");
     try {
-      await api.post<{ credited: number }>("/api/payments/verify");
-      await load();
-      setAwaitingPayment(false);
-    } catch (e) {
-      setError((e as ApiError).message || "Не удалось проверить оплату.");
+      await api.post("/api/payments/verify");
+      await reload();
+      setAwaiting(false);
     } finally {
       setChecking(false);
     }
@@ -122,106 +148,88 @@ function Home({
   return (
     <div className="app">
       <Card>
-        <div className="profile">
-          <Avatar photoUrl={profile?.photoUrl} name={profileName} />
-          <div>
-            <p className="profile-name">{profileName || "Профиль"}</p>
-            {profile?.username ? <p className="hint">@{profile.username}</p> : null}
-          </div>
+        <div className="profile-center">
+          <Avatar photoUrl={profile?.photoUrl} name={profileName} size={64} />
+          <p className="profile-name">{profileName || "Профиль"}</p>
+          {profile?.username ? <p className="hint">@{profile.username}</p> : null}
         </div>
-        <div className="divider" />
-        <div className="row">
-          <span className="icon-row">
-            <CoinIcon /> <span className="hint">Использовано</span>
-          </span>
-          <span>
-            {quota.usedGroups}
-            {quota.unlimited ? "" : ` / ${quota.totalSlots}`}
-          </span>
-        </div>
-        {!quota.unlimited ? (
+      </Card>
+
+      <Card>
+        <SectionHeader icon={<CoinIcon />} title="Квота" />
+        <p className="big-number center">
+          {quota.usedGroups}
+          {quota.unlimited ? "" : ` / ${quota.totalSlots}`}
+        </p>
+        {quota.unlimited ? (
+          <p className="center">
+            <span className="pill">Безлимит</span>
+          </p>
+        ) : (
           <>
             <Button variant="secondary" disabled={buying} onClick={buySlots}>
-              Купить +3 группы (3.99$)
+              Купить +3 группы, 3.99$
             </Button>
-            {awaitingPayment ? (
+            {awaiting ? (
               <Button variant="secondary" disabled={checking} onClick={checkPayment}>
                 Проверить оплату
               </Button>
             ) : null}
           </>
-        ) : (
-          <span className="pill">Безлимит</span>
         )}
       </Card>
 
-      <div className="row">
-        <span className="icon-row">
-          <UsersIcon /> <p className="subtitle">Группы</p>
-        </span>
-      </div>
-
-      <div className="col">
-        {groups.length === 0 ? (
-          <Card>
-            <StateGif src={GIF.empty} alt="" />
-            <p className="hint center">Групп пока нет. Добавьте первую ниже.</p>
-          </Card>
-        ) : (
-          groups.map((g) => (
-            <Card key={g.chatId}>
-              <div
-                className="row"
-                onClick={() => onOpenGroup(g.chatId)}
-                style={{ cursor: "pointer" }}
-              >
-                <div className="icon-row">
+      <Card>
+        <SectionHeader icon={<UsersIcon />} title="Группы" />
+        <div className="col">
+          {groups.length === 0 ? (
+            <p className="hint center">Групп пока нет.</p>
+          ) : (
+            groups.map((g) => (
+              <button key={g.chatId} className="list-item" onClick={() => onOpenGroup(g.chatId)}>
+                <span className="list-item-icon">
                   <ShieldIcon />
-                  <div>
-                    <p className="subtitle">{g.title ?? g.chatId}</p>
-                    <p className="hint">
-                      {g.guardEnabled ? "Guard включён" : "Guard выключен"} · блоков:{" "}
-                      {g._count?.blocks ?? 0}
-                    </p>
-                  </div>
-                </div>
-                <span className="pill">Открыть</span>
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
+                </span>
+                <span className="list-item-title">{g.title ?? g.chatId}</span>
+                <span className={`pill ${g.guardEnabled ? "approve" : ""}`}>
+                  {g.guardEnabled ? "вкл" : "выкл"}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </Card>
 
       <Card>
-        <span className="icon-row">
-          <PlusIcon /> <p className="subtitle">Добавить группу</p>
-        </span>
-        <p className="hint">
-          Добавьте бота в группу администратором с правом приглашать пользователей, затем укажите
-          @username или id группы. Подключить может только владелец группы.
-        </p>
+        <SectionHeader icon={<GroupAddIcon />} title="Добавить группу" />
+        <Button variant="secondary" onClick={() => openExternal(ADD_TO_GROUP_LINK)}>
+          Добавить бота в группу
+        </Button>
         <input
-          className="field"
-          placeholder="@group_username или -100..."
+          className="field center"
+          placeholder="@username или id"
           value={chat}
           onChange={(e) => setChat(e.target.value)}
         />
         <Button disabled={adding || !chat.trim()} onClick={addGroup}>
-          Добавить
+          <span className="btn-icon">
+            <PlusIcon size={18} /> Подключить
+          </span>
         </Button>
         {error ? (
-          <p className="hint" style={{ color: "var(--tg-destructive)" }}>
+          <p className="hint center" style={{ color: "var(--tg-destructive)" }}>
             {error}
           </p>
         ) : null}
       </Card>
 
       {isOperator ? (
-        <Button variant="secondary" onClick={onOpenAdmin}>
-          <span className="icon-row" style={{ justifyContent: "center" }}>
-            <StarIcon /> Админ-панель
-          </span>
-        </Button>
+        <Card>
+          <SectionHeader icon={<StarIcon />} title="Оператор" />
+          <Button variant="secondary" onClick={onOpenAdmin}>
+            Админ-панель
+          </Button>
+        </Card>
       ) : null}
     </div>
   );

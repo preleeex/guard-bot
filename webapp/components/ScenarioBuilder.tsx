@@ -8,7 +8,8 @@ import type {
   RulesConfig,
   ScenarioBlock,
 } from "@/lib/types";
-import { Button } from "./ui";
+import { Button, IconButton } from "./ui";
+import { ArrowUpIcon, ArrowDownIcon, TrashIcon } from "./icons";
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -65,15 +66,19 @@ export function ScenarioBuilder({
               {idx + 1}. {BLOCK_LABELS[block.type] ?? block.type}
             </p>
             <div style={{ display: "flex", gap: 8 }}>
-              <Button small variant="secondary" onClick={() => move(idx, -1)}>
-                Вверх
-              </Button>
-              <Button small variant="secondary" onClick={() => move(idx, 1)}>
-                Вниз
-              </Button>
-              <Button small variant="danger" onClick={() => remove(idx)}>
-                Удалить
-              </Button>
+              <IconButton onClick={() => move(idx, -1)} disabled={idx === 0} aria-label="Вверх">
+                <ArrowUpIcon size={18} />
+              </IconButton>
+              <IconButton
+                onClick={() => move(idx, 1)}
+                disabled={idx === blocks.length - 1}
+                aria-label="Вниз"
+              >
+                <ArrowDownIcon size={18} />
+              </IconButton>
+              <IconButton variant="danger" onClick={() => remove(idx)} aria-label="Удалить">
+                <TrashIcon size={18} />
+              </IconButton>
             </div>
           </div>
 

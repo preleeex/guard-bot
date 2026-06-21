@@ -29,6 +29,22 @@ ownerRouter.get("/me", (req, res) => {
   });
 });
 
+// Single call that powers the owner home screen: operator flag, quota, groups.
+// Combining these into one request keeps the initial load fast.
+ownerRouter.get("/home", async (req, res) => {
+  const userId = req.tgUser!.id;
+  const [quota, groups] = await Promise.all([getQuota(userId), listGroups(userId)]);
+  res.json({
+    isOperator: req.isOwnerOperator === true,
+    quota: {
+      ...quota,
+      totalSlots: quota.unlimited ? null : quota.totalSlots,
+      remaining: quota.unlimited ? null : quota.remaining,
+    },
+    groups,
+  });
+});
+
 // Quota status for the current user.
 ownerRouter.get("/quota", async (req, res) => {
   const quota = await getQuota(req.tgUser!.id);

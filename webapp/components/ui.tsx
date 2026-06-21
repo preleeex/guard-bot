@@ -26,15 +26,49 @@ export function Button({
   );
 }
 
+// Icon button (square), used for compact actions like reorder/delete.
+export function IconButton({
+  children,
+  variant = "secondary",
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "secondary" | "danger";
+}) {
+  return (
+    <button className={`icon-btn ${variant}`} {...rest}>
+      {children}
+    </button>
+  );
+}
+
+// Centered section header: SVG icon above a title.
+export function SectionHeader({
+  icon,
+  title,
+}: {
+  icon: React.ReactNode;
+  title: string;
+}) {
+  return (
+    <div className="section-header">
+      <span className="section-icon">{icon}</span>
+      <p className="subtitle">{title}</p>
+    </div>
+  );
+}
+
 // eslint-disable-next-line @next/next/no-img-element
 export function StateGif({ src, alt = "" }: { src: string; alt?: string }) {
   return <img className="state-gif" src={src} alt={alt} />;
 }
 
+// Custom animated progress bar (replaces the loading GIF).
 export function Loading({ text = "Загрузка" }: { text?: string }) {
   return (
-    <div className="app center">
-      <StateGif src={GIF.loading} alt="loading" />
+    <div className="app loading-wrap">
+      <div className="progress">
+        <div className="progress-bar" />
+      </div>
       <p className="hint center">{text}</p>
     </div>
   );
@@ -60,11 +94,25 @@ export function Message({
   );
 }
 
+// Error state with a retry action.
+export function ErrorState({ text, onRetry }: { text: string; onRetry: () => void }) {
+  return (
+    <div className="app">
+      <Card>
+        <StateGif src={GIF.empty} alt="" />
+        <p className="title center">Ошибка</p>
+        <p className="hint center">{text}</p>
+        <Button onClick={onRetry}>Повторить</Button>
+      </Card>
+    </div>
+  );
+}
+
 // Telegram profile avatar with initials fallback.
 export function Avatar({
   photoUrl,
   name,
-  size = 44,
+  size = 48,
 }: {
   photoUrl?: string;
   name?: string;
@@ -79,14 +127,7 @@ export function Avatar({
     .toUpperCase();
   if (photoUrl) {
     // eslint-disable-next-line @next/next/no-img-element
-    return (
-      <img
-        className="avatar"
-        src={photoUrl}
-        alt=""
-        style={{ width: size, height: size }}
-      />
-    );
+    return <img className="avatar" src={photoUrl} alt="" style={{ width: size, height: size }} />;
   }
   return (
     <div className="avatar avatar-fallback" style={{ width: size, height: size }}>
