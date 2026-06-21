@@ -72,6 +72,8 @@ bot.on("chat_join_request", async (ctx) => {
     chatId: chatId.toString(),
     applicant: applicant.id,
     hasQueryId: Boolean(queryId),
+    updateKeys: Object.keys(update),
+    rawUpdate: JSON.stringify(update).slice(0, 1200),
     groupFound: Boolean(group),
     guardEnabled: group?.guardEnabled ?? false,
     removed: Boolean(group?.removedAt),
