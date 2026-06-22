@@ -28,6 +28,8 @@ const decisionText: Record<string, string> = {
   queue: "Заявка отправлена на ручную проверку.",
 };
 
+const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
 export function Screening({ sessionId }: { sessionId: string | null }) {
   const [state, setState] = useState<"loading" | "gate" | "form" | "done" | "error">("loading");
   const [error, setError] = useState<string>("");
@@ -37,6 +39,8 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
   const [answers, setAnswers] = useState<Record<string, Payload>>({});
   const [result, setResult] = useState<string>("");
   const [decision, setDecision] = useState<string>("");
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [remaining, setRemaining] = useState<number>(0);
 
   const loadScenario = useCallback(async () => {
     if (!sessionId) {
@@ -49,6 +53,9 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
       const data = await api.get<ScenarioResponse>(`/api/screening/${sessionId}`);
       setBlocks(data.blocks);
       setSubscription(data.subscription ?? null);
+      const dl = data.expiresAt ? new Date(data.expiresAt).getTime() : null;
+      setDeadline(dl);
+      if (dl) setRemaining(Math.max(0, Math.floor((dl - Date.now()) / 1000)));
       if (data.subscription?.required && !data.subscription.subscribed) {
         setState("gate");
       } else {
@@ -63,6 +70,25 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
   useEffect(() => {
     loadScenario();
   }, [loadScenario]);
+
+  // Visible countdown. When it hits zero the backend timeout job decides; the
+  // Mini App just shows "time is up" and closes.
+  useEffect(() => {
+    if (state !== "form" || !deadline) return;
+    const tick = () => {
+      const rem = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
+      setRemaining(rem);
+      if (rem <= 0) {
+        setDecision("timeout");
+        setResult("Время вышло.");
+        setState("done");
+        setTimeout(() => getWebApp()?.close(), 2500);
+      }
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [state, deadline]);
 
   const current = blocks[step];
   const currentPayload = current ? answers[current.id] ?? {} : {};
@@ -141,6 +167,7 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
           <p className="hint">
             Шаг {step + 1} из {blocks.length}
           </p>
+          {deadline ? <p className="hint timer">{formatTime(remaining)}</p> : null}
         </div>
         <BlockForm
           block={current}

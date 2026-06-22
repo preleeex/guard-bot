@@ -45,6 +45,10 @@ model Group {
   timeoutSeconds Int    @default(600)
   timeoutAction  String @default("queue") // "queue" | "decline"
 
+  // Cooldown after a decline/timeout: re-requests within this window are auto
+  // declined without opening the Mini App. 0 disables it.
+  cooldownSeconds Int @default(0)
+
   owner   User            @relation(fields: [ownerUserId], references: [id])
   blocks  ScenarioBlock[]
   journal JournalEntry[]

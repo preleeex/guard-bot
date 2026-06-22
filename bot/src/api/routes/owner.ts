@@ -123,6 +123,7 @@ ownerRouter.patch("/groups/:chatId", async (req, res) => {
       resultPolicy: body.resultPolicy,
       timeoutSeconds: body.timeoutSeconds,
       timeoutAction: body.timeoutAction,
+      cooldownSeconds: body.cooldownSeconds,
     });
     res.json({ group });
   } catch (err) {

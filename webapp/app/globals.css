@@ -339,6 +339,12 @@ textarea.field {
   line-height: 1.5;
 }
 
+.timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--tg-button);
+}
+
 .link-btn {
   appearance: none;
   border: none;

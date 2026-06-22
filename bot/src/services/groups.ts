@@ -123,6 +123,7 @@ export async function updateSettings(
     resultPolicy?: unknown;
     timeoutSeconds?: number;
     timeoutAction?: "queue" | "decline";
+    cooldownSeconds?: number;
   }
 ) {
   await assertOwnerOf(chatId, userId);
@@ -134,6 +135,7 @@ export async function updateSettings(
         : {}),
       ...(data.timeoutSeconds !== undefined ? { timeoutSeconds: data.timeoutSeconds } : {}),
       ...(data.timeoutAction !== undefined ? { timeoutAction: data.timeoutAction } : {}),
+      ...(data.cooldownSeconds !== undefined ? { cooldownSeconds: Math.max(0, data.cooldownSeconds) } : {}),
     },
   });
 }

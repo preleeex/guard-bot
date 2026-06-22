@@ -22,6 +22,23 @@ export async function unbanUser(userId: bigint): Promise<void> {
   await prisma.bannedUser.deleteMany({ where: { userId } });
 }
 
+// Whether the applicant is still in the post-decline cooldown for this group
+// (anti-spam: a recently declined/timed-out user cannot retry immediately).
+export async function isOnCooldown(
+  chatId: bigint,
+  userId: bigint,
+  cooldownSeconds: number
+): Promise<boolean> {
+  if (cooldownSeconds <= 0) return false;
+  const last = await prisma.journalEntry.findFirst({
+    where: { chatId, applicantUserId: userId, decision: { in: ["decline", "timeout"] } },
+    orderBy: { finishedAt: "desc" },
+    select: { finishedAt: true },
+  });
+  if (!last) return false;
+  return Date.now() - last.finishedAt.getTime() < cooldownSeconds * 1000;
+}
+
 // --- channel subscription gate ---------------------------------------------
 
 export interface ChannelRequirement {

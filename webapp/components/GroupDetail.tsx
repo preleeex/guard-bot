@@ -71,6 +71,7 @@ export function GroupDetail({ chatId, onBack }: { chatId: string; onBack: () => 
         resultPolicy: group.resultPolicy,
         timeoutSeconds: group.timeoutSeconds,
         timeoutAction: group.timeoutAction,
+        cooldownSeconds: group.cooldownSeconds,
       });
       setGroup(res.group);
       setStatus("Настройки сохранены.");
@@ -235,6 +236,18 @@ function SettingsForm({
         <option value="queue">Ручная проверка</option>
         <option value="decline">Отклонить</option>
       </select>
+
+      <div className="divider" />
+      <p className="subtitle">Кулдаун после отказа</p>
+      <label className="hint">Секунд, 0 — выключено. Повторные заявки в это окно авто-отклоняются.</label>
+      <input
+        className="field"
+        inputMode="numeric"
+        value={String(group.cooldownSeconds ?? 0)}
+        onChange={(e) =>
+          setGroup({ ...group, cooldownSeconds: Math.max(0, Number(e.target.value) || 0) })
+        }
+      />
 
       <Button disabled={saving} onClick={onSave}>
         Сохранить настройки

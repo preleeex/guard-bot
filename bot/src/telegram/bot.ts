@@ -6,7 +6,7 @@ import { sendSystemLog } from "./systemLog";
 import { tryCallApi } from "./api";
 import { createScreeningSession, screeningUrl } from "../services/screening";
 import { markGroupRemoved, connectGroup } from "../services/groups";
-import { isBanned, banUser, unbanUser, checkSubscription } from "../services/moderation";
+import { isBanned, banUser, unbanUser, checkSubscription, isOnCooldown } from "../services/moderation";
 import { registerAdminCommands } from "./adminCommands";
 
 export const bot = new Bot(config.botToken);
@@ -163,6 +163,19 @@ bot.on("chat_join_request", async (ctx) => {
         chat_join_request_query_id: queryId,
         result: "queue",
       });
+    }
+    return;
+  }
+
+  // Anti-spam cooldown: a recently declined applicant is auto-declined.
+  if (await isOnCooldown(chatId, BigInt(applicant.id), group.cooldownSeconds)) {
+    if (queryId) {
+      await tryCallApi("answerChatJoinRequestQuery", {
+        chat_join_request_query_id: queryId,
+        result: "decline",
+      });
+    } else {
+      await tryCallApi("declineChatJoinRequest", { chat_id: Number(chatId), user_id: applicant.id });
     }
     return;
   }

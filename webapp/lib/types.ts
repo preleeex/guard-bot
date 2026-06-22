@@ -58,6 +58,7 @@ export interface Group {
   resultPolicy: ResultPolicy;
   timeoutSeconds: number;
   timeoutAction: "queue" | "decline";
+  cooldownSeconds: number;
   _count?: { blocks: number };
 }
 
