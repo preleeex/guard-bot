@@ -117,3 +117,31 @@ export function GroupAddIcon({ size = 20, ...rest }: IconProps) {
     </svg>
   );
 }
+
+export function QuizIcon({ size = 20, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, rest)}>
+      <path d="M4 6h10M4 12h10M4 18h6" />
+      <path d="M17 6.5l1.4 1.4 2.6-2.9M17 13l1.4 1.4 2.6-2.9" />
+    </svg>
+  );
+}
+
+export function HelpIcon({ size = 20, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, rest)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 113.5 2.3c-.8.4-1 .8-1 1.7" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+export function ExternalIcon({ size = 20, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, rest)}>
+      <path d="M14 4h6v6M20 4l-9 9" />
+      <path d="M18 14v4a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h4" />
+    </svg>
+  );
+}

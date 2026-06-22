@@ -30,7 +30,7 @@ body {
 .app {
   max-width: 520px;
   margin: 0 auto;
-  padding: 16px;
+  padding: calc(16px + var(--tg-top-inset, 0px)) 16px 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -333,6 +333,12 @@ textarea.field {
   text-align: center;
 }
 
+.help-list p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .link-btn {
   appearance: none;
   border: none;
@@ -354,7 +360,7 @@ textarea.field {
 
 /* Bottom navigation tab bar */
 .has-bottom-nav {
-  padding-bottom: 84px;
+  padding-bottom: calc(84px + var(--tg-bottom-inset, 0px));
 }
 
 .bottom-nav {
@@ -368,7 +374,7 @@ textarea.field {
   justify-content: space-around;
   background: var(--tg-section-bg);
   border-top: 1px solid var(--tg-secondary-bg);
-  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 8px calc(8px + var(--tg-bottom-inset, env(safe-area-inset-bottom, 0px)));
   z-index: 20;
 }
 
@@ -396,6 +402,44 @@ textarea.field {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.block-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--tg-secondary-bg);
+  color: var(--tg-button);
+}
+
+/* Add-block chooser: icon cards */
+.add-block-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.add-block {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  background: var(--tg-secondary-bg);
+  color: var(--tg-text);
+  border-radius: 12px;
+  padding: 14px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.add-block svg {
+  color: var(--tg-button);
 }
 
 .thumb {

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { config } from "../../config";
 import { logger } from "../../logger";
 import { requireInitData } from "../auth";
 import { getChat, TelegramApiError } from "../../telegram/api";
@@ -41,6 +42,7 @@ ownerRouter.get("/home", async (req, res) => {
   ]);
   res.json({
     isOperator: req.isOwnerOperator === true,
+    maintenance: config.maintenance,
     subscription,
     quota: {
       ...quota,

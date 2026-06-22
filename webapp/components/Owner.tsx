@@ -7,12 +7,12 @@ import { ADD_TO_GROUP_LINK } from "@/lib/config";
 import { GIF } from "@/lib/assets";
 import type { Group, QuotaStatus } from "@/lib/types";
 import { Avatar, Button, Card, ErrorState, Loading, SectionHeader, StateGif } from "./ui";
-import { UsersIcon, PlusIcon, CoinIcon, StarIcon, ShieldIcon, GroupAddIcon } from "./icons";
+import { UsersIcon, PlusIcon, CoinIcon, StarIcon, ShieldIcon, GroupAddIcon, HelpIcon } from "./icons";
 import { GroupDetail } from "./GroupDetail";
 import { AdminPanel } from "./Admin";
 
 type View = { name: "home" } | { name: "group"; chatId: string };
-type Tab = "groups" | "billing" | "admin";
+type Tab = "groups" | "billing" | "admin" | "help";
 
 interface Subscription {
   required: boolean;
@@ -23,6 +23,7 @@ interface Subscription {
 
 interface HomeData {
   isOperator: boolean;
+  maintenance?: boolean;
   subscription?: Subscription;
   quota: QuotaStatus;
   groups: Group[];
@@ -97,6 +98,19 @@ export function OwnerApp() {
         }}
       />
     );
+
+  // Maintenance: everyone except the operator sees a notice.
+  if (data && data.maintenance && !data.isOperator) {
+    return (
+      <div className="app">
+        <Card>
+          <StateGif src={GIF.empty} alt="" />
+          <p className="title center">Технические работы</p>
+          <p className="hint center">Загляни немного позже.</p>
+        </Card>
+      </div>
+    );
+  }
 
   // Owner panel requires a subscription to the operator's channel.
   if (data && data.subscription?.required && !data.subscription.subscribed) {
@@ -299,6 +313,31 @@ function Home({
 
       {tab === "admin" && isOperator ? <AdminPanel /> : null}
 
+      {tab === "help" ? (
+        <Card>
+          <SectionHeader icon={<HelpIcon />} title="Как пользоваться" />
+          <div className="col help-list">
+            <p>
+              <b>Группы.</b> Нажми «Добавить бота с правами админа», выбери группу. Она появится
+              здесь сама.
+            </p>
+            <p>
+              <b>Сценарий.</b> Открой группу и собери проверку из блоков: Капча, Квиз, Правила. В
+              вопросы можно добавлять фото.
+            </p>
+            <p>
+              <b>Guard.</b> Включи в группе, чтобы при вступлении человеку открывалась проверка.
+            </p>
+            <p>
+              <b>Журнал.</b> В группе видно, кто подал заявку и как её прошёл.
+            </p>
+            <p>
+              <b>Оплата.</b> Лимит групп расширяется тарифами через CryptoBot.
+            </p>
+          </div>
+        </Card>
+      ) : null}
+
       <nav className="bottom-nav">
         <button className={tab === "groups" ? "active" : ""} onClick={() => setTab("groups")}>
           <UsersIcon size={22} />
@@ -307,6 +346,10 @@ function Home({
         <button className={tab === "billing" ? "active" : ""} onClick={() => setTab("billing")}>
           <CoinIcon size={22} />
           <span>Оплата</span>
+        </button>
+        <button className={tab === "help" ? "active" : ""} onClick={() => setTab("help")}>
+          <HelpIcon size={22} />
+          <span>Помощь</span>
         </button>
         {isOperator ? (
           <button className={tab === "admin" ? "active" : ""} onClick={() => setTab("admin")}>

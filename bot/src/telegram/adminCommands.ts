@@ -3,6 +3,7 @@ import { config, isBotOwner } from "../config";
 import { prisma } from "../db";
 import { logger } from "../logger";
 import { callApi } from "./api";
+import { markGroupRemoved } from "../services/groups";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -254,5 +255,22 @@ export function registerAdminCommands(bot: Bot): void {
     }
 
     await ctx.reply(report.length ? `Импорт:\n${report.join("\n")}` : "Нечего импортировать.");
+  });
+
+  // --- /leave <chat_id> : make the bot leave a chat ------------------------
+  bot.command("leave", async (ctx) => {
+    if (!opGuard(ctx)) return;
+    const target = (ctx.match ?? "").toString().trim();
+    if (!/^-?\d+$/.test(target)) {
+      await ctx.reply("Использование: /leave <chat_id>");
+      return;
+    }
+    try {
+      await callApi("leaveChat", { chat_id: Number(target) });
+      await markGroupRemoved(BigInt(target));
+      await ctx.reply(`Вышел из чата ${target}.`);
+    } catch (err) {
+      await ctx.reply(`Не удалось выйти: ${String((err as Error).message)}`);
+    }
   });
 }

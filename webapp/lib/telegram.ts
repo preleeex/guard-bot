@@ -41,6 +41,22 @@ export interface TelegramWebApp {
   // Bot API 8.0+; may be absent on older clients.
   requestFullscreen?: () => void;
   disableVerticalSwipes?: () => void;
+  isFullscreen?: boolean;
+  safeAreaInset?: { top: number; bottom: number; left: number; right: number };
+  contentSafeAreaInset?: { top: number; bottom: number; left: number; right: number };
+}
+
+// In fullscreen the Telegram header overlays the top of the Mini App. Read the
+// safe-area insets and publish them as CSS variables so the layout can pad
+// around the Telegram controls and the device notch / home indicator.
+export function applySafeArea(): void {
+  const wa = getWebApp();
+  if (!wa) return;
+  const top = (wa.safeAreaInset?.top ?? 0) + (wa.contentSafeAreaInset?.top ?? 0);
+  const bottom = (wa.safeAreaInset?.bottom ?? 0) + (wa.contentSafeAreaInset?.bottom ?? 0);
+  const root = document.documentElement;
+  root.style.setProperty("--tg-top-inset", `${top}px`);
+  root.style.setProperty("--tg-bottom-inset", `${bottom}px`);
 }
 
 declare global {

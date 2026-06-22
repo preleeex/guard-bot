@@ -11,8 +11,15 @@ import type {
   ScenarioBlock,
 } from "@/lib/types";
 import { Button, IconButton } from "./ui";
-import { ArrowUpIcon, ArrowDownIcon, TrashIcon } from "./icons";
+import { ArrowUpIcon, ArrowDownIcon, TrashIcon, ShieldIcon, QuizIcon, JournalIcon } from "./icons";
 import { pickImage } from "@/lib/image";
+
+function blockIcon(type: string) {
+  if (type === "captcha") return <ShieldIcon size={18} />;
+  if (type === "quiz") return <QuizIcon size={18} />;
+  if (type === "rules") return <JournalIcon size={18} />;
+  return null;
+}
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -69,7 +76,8 @@ export function ScenarioBuilder({
       {blocks.map((block, idx) => (
         <div className="card" key={block.id}>
           <div className="row">
-            <p className="subtitle">
+            <p className="subtitle icon-row">
+              <span className="block-ico">{blockIcon(block.type)}</span>
               {idx + 1}. {BLOCK_LABELS[block.type] ?? block.type}
             </p>
             <div style={{ display: "flex", gap: 8 }}>
@@ -107,16 +115,19 @@ export function ScenarioBuilder({
         </div>
       ))}
 
-      <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-        <Button small variant="secondary" onClick={() => onChange([...blocks, newBlock("captcha")])}>
-          + Капча
-        </Button>
-        <Button small variant="secondary" onClick={() => onChange([...blocks, newBlock("quiz")])}>
-          + Квиз
-        </Button>
-        <Button small variant="secondary" onClick={() => onChange([...blocks, newBlock("rules")])}>
-          + Правила
-        </Button>
+      <div className="add-block-grid">
+        <button className="add-block" onClick={() => onChange([...blocks, newBlock("captcha")])}>
+          <ShieldIcon size={24} />
+          <span>Капча</span>
+        </button>
+        <button className="add-block" onClick={() => onChange([...blocks, newBlock("quiz")])}>
+          <QuizIcon size={24} />
+          <span>Квиз</span>
+        </button>
+        <button className="add-block" onClick={() => onChange([...blocks, newBlock("rules")])}>
+          <JournalIcon size={24} />
+          <span>Правила</span>
+        </button>
       </div>
     </div>
   );

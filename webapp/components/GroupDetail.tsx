@@ -2,10 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { openExternal } from "@/lib/telegram";
 import type { Group, JournalEntry, ResultPolicy, ScenarioBlock } from "@/lib/types";
 import { Button, Card, Loading } from "./ui";
+import { ExternalIcon } from "./icons";
 import { ScenarioBuilder } from "./ScenarioBuilder";
 import { Preview } from "./Preview";
+
+function groupLink(chatId: string): string {
+  return chatId.startsWith("-100") ? `https://t.me/c/${chatId.slice(4)}` : "";
+}
 
 type Tab = "scenario" | "settings" | "journal";
 
@@ -91,6 +97,14 @@ export function GroupDetail({ chatId, onBack }: { chatId: string; onBack: () => 
         </Button>
         <p className="subtitle">{group.title ?? group.chatId}</p>
       </div>
+
+      {groupLink(chatId) ? (
+        <Button variant="secondary" onClick={() => openExternal(groupLink(chatId))}>
+          <span className="btn-icon">
+            <ExternalIcon size={18} /> Перейти в группу
+          </span>
+        </Button>
+      ) : null}
 
       <Card>
         <div className="row">

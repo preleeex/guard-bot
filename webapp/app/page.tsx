@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { applyTheme, getWebApp, isInTelegram } from "@/lib/telegram";
+import { applyTheme, applySafeArea, getWebApp, isInTelegram } from "@/lib/telegram";
 import { GIF } from "@/lib/assets";
 import { Loading, Message } from "@/components/ui";
 import { Screening } from "@/components/Screening";
@@ -20,7 +20,8 @@ export default function Page() {
     if (wa) {
       wa.ready();
       wa.expand();
-      // Open the Mini App full-screen where supported.
+      // Open the Mini App full-screen where supported, then pad around the
+      // Telegram header / device insets so content is not hidden.
       try {
         wa.requestFullscreen?.();
         wa.disableVerticalSwipes?.();
@@ -28,7 +29,11 @@ export default function Page() {
         // older clients: ignore
       }
       applyTheme();
+      applySafeArea();
       wa.onEvent("themeChanged", applyTheme);
+      wa.onEvent("safeAreaChanged", applySafeArea);
+      wa.onEvent("contentSafeAreaChanged", applySafeArea);
+      wa.onEvent("fullscreenChanged", applySafeArea);
     }
 
     if (!isInTelegram()) {

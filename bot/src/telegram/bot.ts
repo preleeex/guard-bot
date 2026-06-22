@@ -23,6 +23,12 @@ bot.command("start", async (ctx) => {
   // Banned users are ignored entirely.
   if (await isBanned(userId)) return;
 
+  // Maintenance: everyone except the operator gets a notice.
+  if (config.maintenance && !isBotOwner(from.id)) {
+    await ctx.reply("Идут технические работы. Загляни немного позже.");
+    return;
+  }
+
   const existing = await prisma.user.findUnique({ where: { id: userId } });
   if (!existing) {
     await prisma.user.create({
