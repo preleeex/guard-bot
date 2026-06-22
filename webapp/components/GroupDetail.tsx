@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { openExternal } from "@/lib/telegram";
 import type { Group, JournalEntry, ResultPolicy, ScenarioBlock } from "@/lib/types";
-import { Avatar, Button, Card, Loading, Toggle } from "./ui";
+import { Avatar, Button, Card, Loading, Toggle, InfoTip } from "./ui";
 import { ExternalIcon } from "./icons";
 import { ScenarioBuilder } from "./ScenarioBuilder";
 import { Preview } from "./Preview";
@@ -122,7 +122,10 @@ export function GroupDetail({
 
       <Card>
         <div className="row">
-          <p className="subtitle">Guard mode</p>
+          <span className="icon-row">
+            <p className="subtitle">Guard mode</p>
+            <InfoTip text="Включает проверку при вступлении: человек проходит сценарий в Mini App, и только потом его впускают." />
+          </span>
           <Toggle
             checked={group.guardEnabled}
             onChange={async (next) => {
@@ -216,7 +219,10 @@ function SettingsForm({
 
   return (
     <Card>
-      <p className="subtitle">Результат проверки</p>
+      <span className="icon-row">
+        <p className="subtitle">Результат проверки</p>
+        <InfoTip text="Что делать с заявкой: авто-одобрить при успехе, авто-отклонить при провале, либо отправить в очередь на ручное решение при пороговом балле." />
+      </span>
       <div className="row">
         <span>Авто-одобрение при успехе</span>
         <Toggle checked={policy.passApprove} onChange={(v) => setPolicy({ passApprove: v })} />
@@ -247,7 +253,10 @@ function SettingsForm({
       ) : null}
 
       <div className="divider" />
-      <p className="subtitle">Время на прохождение</p>
+      <span className="icon-row">
+        <p className="subtitle">Время на прохождение</p>
+        <InfoTip text="Сколько секунд даётся на прохождение. По истечении применяется действие ниже." />
+      </span>
       <input
         className="field"
         inputMode="numeric"
@@ -265,7 +274,10 @@ function SettingsForm({
       </select>
 
       <div className="divider" />
-      <p className="subtitle">Кулдаун после отказа</p>
+      <span className="icon-row">
+        <p className="subtitle">Кулдаун после отказа</p>
+        <InfoTip text="Сколько секунд после отказа повторные заявки от этого человека авто-отклоняются, чтобы не спамил." />
+      </span>
       <input
         className="field"
         inputMode="numeric"
@@ -278,7 +290,10 @@ function SettingsForm({
 
       <div className="divider" />
       <div className="row">
-        <span>Голосовая проверка</span>
+        <span className="icon-row">
+          <span>Голосовая проверка</span>
+          <InfoTip text="Вместо Mini App заявителя просят записать голосовое боту в личку. Вы получаете его с кнопками Принять и Отклонить. Заменяет сценарий." />
+        </span>
         <Toggle
           checked={group.voiceScreening}
           onChange={(v) => setGroup({ ...group, voiceScreening: v })}
@@ -294,7 +309,10 @@ function SettingsForm({
       ) : null}
 
       <div className="divider" />
-      <p className="subtitle">Эмодзи-статус</p>
+      <span className="icon-row">
+        <p className="subtitle">Эмодзи-статус</p>
+        <InfoTip text="Пускать только тех, у кого установлен нужный эмодзи-статус. Поставьте себе нужный статус и нажмите кнопку ниже, чтобы задать требование. Платная функция." />
+      </span>
       {premium ? (
         <div className="col">
           <p className="hint">

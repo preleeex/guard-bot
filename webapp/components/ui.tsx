@@ -3,21 +3,30 @@
 import React, { useState } from "react";
 import { GIF } from "@/lib/assets";
 
-// A small "?" button that toggles a short explanation bubble.
+// A small "?" button that opens a bottom sheet with a short explanation.
 export function InfoTip({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <span className="info-wrap">
-      <button
-        type="button"
-        className="info-tip"
-        aria-label="Что это"
-        onClick={() => setOpen((v) => !v)}
-      >
+    <>
+      <button type="button" className="info-tip" aria-label="Что это" onClick={() => setOpen(true)}>
         ?
       </button>
-      {open ? <span className="info-bubble">{text}</span> : null}
-    </span>
+      {open ? <Sheet onClose={() => setOpen(false)}>{text}</Sheet> : null}
+    </>
+  );
+}
+
+// Bottom sheet that slides up from the bottom with a dimmed backdrop. Tapping
+// the backdrop or the action button closes it.
+export function Sheet({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="sheet-overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <span className="sheet-handle" />
+        <p className="sheet-text">{children}</p>
+        <Button onClick={onClose}>Понятно</Button>
+      </div>
+    </div>
   );
 }
 

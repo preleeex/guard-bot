@@ -598,12 +598,7 @@ textarea.field {
   text-align: left;
 }
 
-/* Info tip */
-.info-wrap {
-  position: relative;
-  display: inline-flex;
-}
-
+/* Info tip: opens a bottom sheet with the explanation */
 .info-tip {
   width: 22px;
   height: 22px;
@@ -615,22 +610,65 @@ textarea.field {
   font-size: 13px;
   cursor: pointer;
   line-height: 1;
+  flex: 0 0 auto;
 }
 
-.info-bubble {
-  position: absolute;
-  top: 28px;
-  right: 0;
-  width: 230px;
+/* Bottom sheet */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.5);
+  animation: sheet-fade 0.2s ease;
+}
+
+.sheet {
+  width: 100%;
+  box-sizing: border-box;
   background: var(--tg-bg);
-  border: 1px solid var(--tg-secondary-bg);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--tg-hint);
-  z-index: 30;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  border-radius: 18px 18px 0 0;
+  padding: 12px 16px calc(18px + var(--tg-bottom-inset, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.3);
+  animation: sheet-up 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--tg-hint);
+  opacity: 0.4;
+  align-self: center;
+}
+
+.sheet-text {
+  margin: 0;
+  color: var(--tg-text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .opt-img {
