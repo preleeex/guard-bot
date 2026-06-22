@@ -167,6 +167,36 @@ const dict = {
   },
   // --- owner: language ---
   language: { ru: "Язык", en: "Language" },
+  // --- owner: group setup guide ---
+  setup_title: { ru: "Настройка группы", en: "Group setup" },
+  setup_intro: {
+    ru: "Чтобы проверка при вступлении работала, выполните 4 шага в самой группе:",
+    en: "For join screening to work, do these 4 steps in the group itself:",
+  },
+  setup_step_join: {
+    ru: "Включите «Заявки на вступление». Управление группой, Тип группы, пункт про вступление по заявке.",
+    en: "Enable join requests. Manage group, Group type, the join-by-request option.",
+  },
+  setup_step_admin: {
+    ru: "Сделайте бота администратором с правом «Добавлять участников» и отключите у него анонимность.",
+    en: "Make the bot an admin with the Add members right and turn off its anonymity.",
+  },
+  setup_step_guard: {
+    ru: "Назначьте бота guard-ботом в настройках вступления (делается в приложении Telegram).",
+    en: "Assign the bot as the guard bot in the join settings (done in the Telegram app).",
+  },
+  setup_step_scenario: {
+    ru: "Соберите сценарий и включите Guard mode в карточке группы.",
+    en: "Build a scenario and turn on Guard mode in the group card.",
+  },
+  setup_note_guard: {
+    ru: "Важно: назначение guard-бота сбрасывается при любой правке прав бота. Если перестало работать, переназначьте заново.",
+    en: "Note: the guard bot assignment resets whenever the bot's rights are edited. If it stops working, assign it again.",
+  },
+  setup_note_check: {
+    ru: "Проверить всё сразу можно кнопкой «Проверить настройку» в карточке группы.",
+    en: "Verify everything at once with the Check setup button in the group card.",
+  },
 } as const;
 
 export type I18nKey = keyof typeof dict;

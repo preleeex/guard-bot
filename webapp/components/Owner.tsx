@@ -378,6 +378,19 @@ function Home({
           </div>
         </Card>
         <Card>
+          <SectionHeader icon={<ShieldIcon />} title={t("setup_title")} />
+          <StateGif src={GIF.loading} alt="" />
+          <p className="hint">{t("setup_intro")}</p>
+          <ol className="steps">
+            <li>{t("setup_step_join")}</li>
+            <li>{t("setup_step_admin")}</li>
+            <li>{t("setup_step_guard")}</li>
+            <li>{t("setup_step_scenario")}</li>
+          </ol>
+          <p className="hint">{t("setup_note_guard")}</p>
+          <p className="hint">{t("setup_note_check")}</p>
+        </Card>
+        <Card>
           <SectionHeader icon={<HelpIcon />} title="Как пользоваться" />
           <div className="col help-list">
             <p>

@@ -381,6 +381,43 @@ textarea.field {
   line-height: 1.5;
 }
 
+/* Numbered setup steps with circular counters. */
+.steps {
+  list-style: none;
+  counter-reset: step;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.steps li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 36px;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+}
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--tg-button);
+  color: var(--tg-button-text);
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .timer {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
