@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { config, isBotOwner } from "../config";
+import { prisma } from "../db";
 
 export interface TgUser {
   id: bigint;
@@ -89,6 +90,22 @@ export function requireInitData(req: Request, res: Response, next: NextFunction)
 export function requireOperator(req: Request, res: Response, next: NextFunction): void {
   if (!req.isOwnerOperator) {
     res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  next();
+}
+
+// Block globally banned users from every authenticated surface. The Mini App
+// turns a 403 { error: "banned" } into the "you are blocked" screen. The
+// operator is never blocked (safety: cannot lock themselves out).
+export async function requireNotBanned(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (req.isOwnerOperator) {
+    next();
+    return;
+  }
+  const banned = await prisma.bannedUser.findUnique({ where: { userId: req.tgUser!.id } });
+  if (banned) {
+    res.status(403).json({ error: "banned", message: "Доступ заблокирован." });
     return;
   }
   next();

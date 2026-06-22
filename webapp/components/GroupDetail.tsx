@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import { openExternal } from "@/lib/telegram";
+import { openExternal, getInitData } from "@/lib/telegram";
+import { t, tDyn } from "@/lib/i18n";
 import type { Group, JournalEntry, ResultPolicy, ScenarioBlock } from "@/lib/types";
 import { Avatar, Button, Card, Loading, Toggle, InfoTip } from "./ui";
 import { ExternalIcon } from "./icons";
 import { ScenarioBuilder } from "./ScenarioBuilder";
 import { Preview } from "./Preview";
 
-type Tab = "scenario" | "settings" | "journal";
+type Tab = "scenario" | "settings" | "queue" | "journal";
 
 const decisionLabel: Record<string, string> = {
   approve: "Одобрено",
@@ -85,6 +86,9 @@ export function GroupDetail({
         voiceScreening: group.voiceScreening,
         voicePrompt: group.voicePrompt,
         emojiGate: group.emojiGate,
+        welcomeEnabled: group.welcomeEnabled,
+        welcomeText: group.welcomeText,
+        welcomeDeleteSeconds: group.welcomeDeleteSeconds,
       });
       setGroup(res.group);
       setStatus("Настройки сохранены.");
@@ -145,6 +149,9 @@ export function GroupDetail({
         <Button small variant={tab === "settings" ? "primary" : "secondary"} onClick={() => setTab("settings")}>
           Настройки
         </Button>
+        <Button small variant={tab === "queue" ? "primary" : "secondary"} onClick={() => setTab("queue")}>
+          {t("queue_title")}
+        </Button>
         <Button small variant={tab === "journal" ? "primary" : "secondary"} onClick={() => setTab("journal")}>
           Журнал
         </Button>
@@ -176,10 +183,13 @@ export function GroupDetail({
         />
       ) : null}
 
+      {tab === "queue" ? <QueueList chatId={chatId} /> : null}
+
       {tab === "journal" ? (
         <>
           <StatsCard chatId={chatId} />
           <JournalList chatId={chatId} decisionLabel={decisionLabel} highlightUserId={initialJournalUserId} />
+          <GroupBansCard chatId={chatId} />
         </>
       ) : null}
     </div>
@@ -187,14 +197,12 @@ export function GroupDetail({
 }
 
 interface SetupReport {
-  botAdmin: boolean;
-  canApprove: boolean;
-  joinByRequest: boolean;
-  guardEnabled: boolean;
+  items: { key: string; ok: boolean }[];
   ok: boolean;
 }
 
-// On-demand diagnostics so the owner can see why guard might do nothing.
+// On-demand diagnostics so the owner can see why guard might do nothing. Each
+// failing item shows a localized "how to fix" hint.
 function SetupCheck({ chatId }: { chatId: string }) {
   const [report, setReport] = useState<SetupReport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -212,32 +220,27 @@ function SetupCheck({ chatId }: { chatId: string }) {
     }
   };
 
-  const Line = ({ ok, label }: { ok: boolean; label: string }) => (
-    <div className="row">
-      <span className="hint">{label}</span>
-      <span className={`pill ${ok ? "approve" : "decline"}`}>{ok ? "ОК" : "Нет"}</span>
-    </div>
-  );
-
   return (
     <Card>
+      <p className="subtitle">{t("checklist_title")}</p>
       <Button small variant="secondary" disabled={busy} onClick={run}>
-        Проверить настройку
+        {t("check_run")}
       </Button>
       {err ? <p className="hint">{err}</p> : null}
       {report ? (
-        <div className="col" style={{ gap: 6, marginTop: 8 }}>
-          <Line ok={report.botAdmin} label="Бот админ группы" />
-          <Line ok={report.canApprove} label="Может одобрять заявки" />
-          <Line ok={report.joinByRequest} label="Включён приём заявок" />
-          {!report.ok ? (
-            <p className="hint">
-              Проверка не сработает, пока всё выше не ОК. Сделайте бота админом с правом
-              добавлять участников и включите в группе «Заявки на вступление».
-            </p>
-          ) : (
-            <p className="hint">Всё готово. Guard работает.</p>
-          )}
+        <div className="col" style={{ gap: 8, marginTop: 8 }}>
+          {report.items.map((it) => (
+            <div className="col" key={it.key} style={{ gap: 2 }}>
+              <div className="row">
+                <span className="hint">{tDyn(`check_${it.key}`)}</span>
+                <span className={`pill ${it.ok ? "approve" : "decline"}`}>
+                  {it.ok ? t("check_ok") : t("check_bad")}
+                </span>
+              </div>
+              {!it.ok ? <p className="hint">{tDyn(`fix_${it.key}`)}</p> : null}
+            </div>
+          ))}
+          {report.ok ? <p className="hint">{t("check_all_ok")}</p> : null}
         </div>
       ) : null}
     </Card>
@@ -245,47 +248,224 @@ function SetupCheck({ chatId }: { chatId: string }) {
 }
 
 interface GroupStats {
+  period: string;
   total: number;
   approve: number;
   decline: number;
   queue: number;
   timeout: number;
-  last7d: number;
+  conversion: number;
 }
+
+type Period = "today" | "7d" | "all";
 
 function StatsCard({ chatId }: { chatId: string }) {
   const [stats, setStats] = useState<GroupStats | null>(null);
+  const [period, setPeriod] = useState<Period>("all");
   useEffect(() => {
-    api.get<GroupStats>(`/api/owner/groups/${chatId}/stats`).then(setStats).catch(() => undefined);
-  }, [chatId]);
-  if (!stats) return null;
+    api
+      .get<GroupStats>(`/api/owner/groups/${chatId}/stats?period=${period}`)
+      .then(setStats)
+      .catch(() => undefined);
+  }, [chatId, period]);
+
+  const rows: [string, number | string][] = stats
+    ? [
+        [t("stat_total"), stats.total],
+        [t("stat_approve"), stats.approve],
+        [t("stat_decline"), stats.decline],
+        [t("stat_queue"), stats.queue],
+        [t("stat_timeout"), stats.timeout],
+        [t("stat_conversion"), `${stats.conversion}%`],
+      ]
+    : [];
+
   return (
     <Card>
-      <p className="subtitle">Статистика</p>
-      <div className="row">
-        <span className="hint">Всего заявок</span>
-        <span>{stats.total}</span>
+      <p className="subtitle">{t("stats_title")}</p>
+      <div className="row" style={{ gap: 8 }}>
+        {(["today", "7d", "all"] as Period[]).map((p) => (
+          <Button
+            key={p}
+            small
+            variant={period === p ? "primary" : "secondary"}
+            onClick={() => setPeriod(p)}
+          >
+            {p === "today" ? t("period_today") : p === "7d" ? t("period_7d") : t("period_all")}
+          </Button>
+        ))}
       </div>
-      <div className="row">
-        <span className="hint">За 7 дней</span>
-        <span>{stats.last7d}</span>
-      </div>
-      <div className="row">
-        <span className="hint">Одобрено</span>
-        <span>{stats.approve}</span>
-      </div>
-      <div className="row">
-        <span className="hint">Отклонено</span>
-        <span>{stats.decline}</span>
-      </div>
-      <div className="row">
-        <span className="hint">Очередь</span>
-        <span>{stats.queue}</span>
-      </div>
-      <div className="row">
-        <span className="hint">Таймаут</span>
-        <span>{stats.timeout}</span>
-      </div>
+      {stats
+        ? rows.map(([label, value]) => (
+            <div className="row" key={label}>
+              <span className="hint">{label}</span>
+              <span>{value}</span>
+            </div>
+          ))
+        : null}
+    </Card>
+  );
+}
+
+interface QueueItem {
+  id: string;
+  kind: "voice" | "pending";
+  applicantUserId: string;
+  applicantUsername: string | null;
+  applicantName: string | null;
+  createdAt: string;
+}
+
+function QueueList({ chatId }: { chatId: string }) {
+  const [items, setItems] = useState<QueueItem[] | null>(null);
+  const [busy, setBusy] = useState<string>("");
+
+  const load = () =>
+    api.get<{ items: QueueItem[] }>(`/api/owner/groups/${chatId}/queue`).then((d) => setItems(d.items));
+  useEffect(() => {
+    load();
+  }, [chatId]);
+
+  const decide = async (item: QueueItem, decision: "approve" | "decline") => {
+    setBusy(item.id);
+    try {
+      await api.post(`/api/owner/groups/${chatId}/queue/decision`, {
+        kind: item.kind,
+        id: item.id,
+        decision,
+      });
+      await load();
+    } catch {
+      // ignore; the list reload reflects the real state
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const banInGroup = async (item: QueueItem) => {
+    setBusy(item.id);
+    try {
+      await api.post(`/api/owner/groups/${chatId}/bans`, {
+        userId: item.applicantUserId,
+        username: item.applicantUsername ?? undefined,
+        name: item.applicantName ?? undefined,
+      });
+      await api.post(`/api/owner/groups/${chatId}/queue/decision`, {
+        kind: item.kind,
+        id: item.id,
+        decision: "decline",
+      });
+      await load();
+    } catch {
+      // ignore
+    } finally {
+      setBusy("");
+    }
+  };
+
+  if (!items) return <Loading />;
+  if (items.length === 0)
+    return (
+      <Card>
+        <p className="hint center">{t("queue_empty")}</p>
+      </Card>
+    );
+
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+
+  return (
+    <div className="col">
+      {items.map((item) => {
+        const name = item.applicantUsername
+          ? `@${item.applicantUsername}`
+          : item.applicantName ?? item.applicantUserId;
+        const voiceUrl =
+          item.kind === "voice" && apiBase
+            ? `${apiBase}/api/owner/groups/${chatId}/queue/voice/${item.id}?i=${encodeURIComponent(getInitData())}`
+            : null;
+        return (
+          <Card key={`${item.kind}:${item.id}`}>
+            <div className="row">
+              <Avatar name={item.applicantName ?? item.applicantUsername ?? undefined} size={36} />
+              <span className="list-item-title">{name}</span>
+              <span className="pill">{item.kind === "voice" ? t("queue_voice") : t("queue_pending")}</span>
+            </div>
+            {voiceUrl ? (
+              // eslint-disable-next-line jsx-a11y/media-has-caption
+              <audio controls preload="none" src={voiceUrl} style={{ width: "100%", marginTop: 6 }} />
+            ) : null}
+            <div className="row" style={{ gap: 8, marginTop: 8 }}>
+              <Button small disabled={busy === item.id} onClick={() => decide(item, "approve")}>
+                {t("accept")}
+              </Button>
+              <Button
+                small
+                variant="secondary"
+                disabled={busy === item.id}
+                onClick={() => decide(item, "decline")}
+              >
+                {t("reject")}
+              </Button>
+              <Button
+                small
+                variant="danger"
+                disabled={busy === item.id}
+                onClick={() => banInGroup(item)}
+              >
+                {t("groupban_in_group")}
+              </Button>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+interface GroupBan {
+  userId: string;
+  username: string | null;
+  name: string | null;
+  reason: string | null;
+  createdAt: string;
+}
+
+function GroupBansCard({ chatId }: { chatId: string }) {
+  const [bans, setBans] = useState<GroupBan[] | null>(null);
+  const load = () =>
+    api.get<{ bans: GroupBan[] }>(`/api/owner/groups/${chatId}/bans`).then((d) => setBans(d.bans));
+  useEffect(() => {
+    load();
+  }, [chatId]);
+
+  const unban = async (userId: string) => {
+    try {
+      await api.delete(`/api/owner/groups/${chatId}/bans/${userId}`);
+    } catch {
+      // ignore
+    }
+    await load();
+  };
+
+  if (!bans) return null;
+  return (
+    <Card>
+      <p className="subtitle">{t("groupban_title")}</p>
+      {bans.length === 0 ? (
+        <p className="hint center">{t("groupban_empty")}</p>
+      ) : (
+        bans.map((b) => (
+          <div className="row" key={b.userId}>
+            <span className="hint">
+              {b.username ? `@${b.username}` : b.name ?? b.userId}
+              {b.reason ? ` · ${b.reason}` : ""}
+            </span>
+            <Button small variant="secondary" onClick={() => unban(b.userId)}>
+              {t("unban")}
+            </Button>
+          </div>
+        ))
+      )}
     </Card>
   );
 }
@@ -446,6 +626,41 @@ function SettingsForm({
         <p className="hint">Доступно на платном тарифе.</p>
       )}
 
+      <div className="divider" />
+      <div className="row">
+        <span className="icon-row">
+          <span>{t("welcome_title")}</span>
+          <InfoTip text="После одобрения бот публикует приветствие в группе с упоминанием нового участника. Можно автоудаление через N секунд." />
+        </span>
+        <Toggle
+          checked={group.welcomeEnabled}
+          onChange={(v) => setGroup({ ...group, welcomeEnabled: v })}
+        />
+      </div>
+      {group.welcomeEnabled ? (
+        <div className="col">
+          <textarea
+            className="field"
+            placeholder={t("welcome_text_ph")}
+            value={group.welcomeText ?? ""}
+            onChange={(e) => setGroup({ ...group, welcomeText: e.target.value })}
+          />
+          <input
+            className="field"
+            inputMode="numeric"
+            placeholder={t("welcome_delete_ph")}
+            value={group.welcomeDeleteSeconds == null ? "" : String(group.welcomeDeleteSeconds)}
+            onChange={(e) => {
+              const v = e.target.value.trim();
+              setGroup({
+                ...group,
+                welcomeDeleteSeconds: v === "" ? null : Math.max(0, Number(v) || 0),
+              });
+            }}
+          />
+        </div>
+      ) : null}
+
       <Button disabled={saving} onClick={onSave}>
         Сохранить
       </Button>
@@ -517,6 +732,21 @@ function JournalList({
                     Посмотреть профиль
                   </Button>
                 ) : null}
+                <Button
+                  small
+                  variant="danger"
+                  onClick={async () => {
+                    await api
+                      .post(`/api/owner/groups/${chatId}/bans`, {
+                        userId: e.applicantUserId,
+                        username: e.applicantUsername ?? undefined,
+                        name: e.applicantName ?? undefined,
+                      })
+                      .catch(() => undefined);
+                  }}
+                >
+                  {t("groupban_in_group")}
+                </Button>
               </div>
             ) : (
               <p className="hint">

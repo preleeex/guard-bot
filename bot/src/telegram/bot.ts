@@ -5,10 +5,11 @@ import { logger } from "../logger";
 import { sendSystemLog } from "./systemLog";
 import { tryCallApi } from "./api";
 import { createScreeningSession, screeningUrl, applyJoinDecision } from "../services/screening";
-import { markGroupRemoved, connectGroup } from "../services/groups";
+import { markGroupRemoved, connectGroup, nudgeGuardIfNeeded } from "../services/groups";
 import { addJournalEntry } from "../services/journal";
 import {
   isBanned,
+  isGroupBanned,
   banUserEverywhere,
   unbanUser,
   checkSubscription,
@@ -16,7 +17,15 @@ import {
   hasRequiredEmojiStatus,
   recordJoin,
 } from "../services/moderation";
+import { t, normalizeLang } from "../i18n";
 import { registerAdminCommands } from "./adminCommands";
+
+// Build a Mini App URL that shows a static reason screen (no session needed),
+// used in query mode so applicants who never started the bot still see why they
+// were not let in.
+function infoUrl(reason: string): string {
+  return `${config.miniAppUrl}/?mode=info&reason=${encodeURIComponent(reason)}`;
+}
 
 export const bot = new Bot(config.botToken);
 
@@ -32,9 +41,11 @@ bot.command("start", async (ctx) => {
   // Banned users are ignored entirely.
   if (await isBanned(userId)) return;
 
+  const lang = normalizeLang(from.language_code);
+
   // Maintenance: everyone except the operator gets a notice.
   if (config.maintenance && !isBotOwner(from.id)) {
-    await ctx.reply("Идут технические работы. Загляни немного позже.");
+    await ctx.reply(t(lang, "maintenance"));
     return;
   }
 
@@ -63,11 +74,11 @@ bot.command("start", async (ctx) => {
       session.status === "pending" &&
       session.expiresAt.getTime() > Date.now()
     ) {
-      const kb = new InlineKeyboard().webApp("Пройти проверку", screeningUrl(sessionId));
-      await ctx.reply("Проверка для вступления в группу.", { reply_markup: kb });
+      const kb = new InlineKeyboard().webApp(t(lang, "pass_verification"), screeningUrl(sessionId));
+      await ctx.reply(t(lang, "verify_to_join"), { reply_markup: kb });
       return;
     }
-    await ctx.reply("Проверка не найдена или уже завершена.");
+    await ctx.reply(t(lang, "check_not_found"));
     return;
   }
 
@@ -84,11 +95,11 @@ bot.command("start", async (ctx) => {
       session.expiresAt.getTime() > Date.now()
     ) {
       const group = await prisma.group.findUnique({ where: { chatId: session.chatId } });
-      const prompt = group?.voicePrompt?.trim() || "Запишите голосовое сообщение, чтобы вступить в группу.";
-      await ctx.reply(`${prompt}\n\nОтправьте голосовое сообщение сюда, в этот чат.`);
+      const prompt = group?.voicePrompt?.trim() || t(lang, "voice_default_prompt");
+      await ctx.reply(`${prompt}\n\n${t(lang, "voice_send_here")}`);
       return;
     }
-    await ctx.reply("Проверка не найдена или уже завершена.");
+    await ctx.reply(t(lang, "check_not_found"));
     return;
   }
 
@@ -192,8 +203,9 @@ bot.on("chat_join_request", async (ctx) => {
     removed: Boolean(group?.removedAt),
   });
 
-  // Not configured or guard disabled: hand the request back to humans.
-  if (!group || group.removedAt || !group.guardEnabled) {
+  // Not configured, guard disabled, or the group owner is globally banned: hand
+  // the request back to humans and never screen.
+  if (!group || group.removedAt || !group.guardEnabled || (await isBanned(group.ownerUserId))) {
     if (queryId) {
       await tryCallApi("answerChatJoinRequestQuery", {
         chat_join_request_query_id: queryId,
@@ -201,6 +213,35 @@ bot.on("chat_join_request", async (ctx) => {
       });
     }
     return;
+  }
+
+  // Per-group ban (set by the owner): auto-decline without opening the Mini App.
+  if (await isGroupBanned(chatId, BigInt(applicant.id))) {
+    if (queryId) {
+      await tryCallApi("answerChatJoinRequestQuery", {
+        chat_join_request_query_id: queryId,
+        result: "decline",
+      });
+    } else {
+      await tryCallApi("declineChatJoinRequest", { chat_id: Number(chatId), user_id: applicant.id });
+    }
+    await addJournalEntry({
+      chatId,
+      applicantUserId: BigInt(applicant.id),
+      applicantUsername: applicant.username ?? null,
+      applicantName: applicant.first_name ?? null,
+      decision: "decline",
+      reason: "Бан в группе.",
+      answers: [],
+      startedAt: new Date(),
+    });
+    return;
+  }
+
+  // Legacy join request (no query id) while guard is on: the guard bot may have
+  // been unassigned. Nudge the owner once (deduped) so they can re-assign it.
+  if (!queryId) {
+    void nudgeGuardIfNeeded(chatId);
   }
 
   // Anti-raid: during a surge of join requests, queue everything for manual
@@ -236,21 +277,23 @@ bot.on("chat_join_request", async (ctx) => {
   }
 
   // Emoji-status gate (paid feature): the applicant must carry a specific
-  // Telegram emoji status, otherwise the request is declined.
+  // Telegram emoji status. In query mode we show a reason screen in the Mini App
+  // (works even if the applicant never started the bot); in legacy mode we DM.
   if (group.emojiGate && group.emojiStatusId) {
+    const lang = normalizeLang(applicant.language_code);
     const ok = await hasRequiredEmojiStatus(BigInt(applicant.id), group.emojiStatusId);
     if (!ok) {
       if (queryId) {
-        await tryCallApi("answerChatJoinRequestQuery", {
+        await tryCallApi("sendChatJoinRequestWebApp", {
           chat_join_request_query_id: queryId,
-          result: "decline",
+          web_app_url: infoUrl("emoji"),
         });
-      } else {
-        await tryCallApi("declineChatJoinRequest", { chat_id: Number(chatId), user_id: applicant.id });
+        return;
       }
+      await tryCallApi("declineChatJoinRequest", { chat_id: Number(chatId), user_id: applicant.id });
       await tryCallApi("sendMessage", {
         chat_id: applicant.id,
-        text: "Для вступления нужен определённый эмодзи-статус. Установите его в профиле и подайте заявку снова.",
+        text: t(lang, "emoji_required"),
       });
       await addJournalEntry({
         chatId,
@@ -271,6 +314,7 @@ bot.on("chat_join_request", async (ctx) => {
   // we show a Mini App with an "open bot" button (works even without a prior
   // DM); in legacy mode we DM the prompt directly.
   if (group.voiceScreening) {
+    const lang = normalizeLang(applicant.language_code);
     const voiceSession = await createScreeningSession({
       chatId,
       applicantUserId: BigInt(applicant.id),
@@ -280,7 +324,7 @@ bot.on("chat_join_request", async (ctx) => {
       mode: "voice",
       timeoutSeconds: group.timeoutSeconds,
     });
-    const prompt = group.voicePrompt?.trim() || "Запишите голосовое сообщение, чтобы вступить в группу.";
+    const prompt = group.voicePrompt?.trim() || t(lang, "voice_default_prompt");
     if (queryId) {
       const ok = await tryCallApi("sendChatJoinRequestWebApp", {
         chat_join_request_query_id: queryId,
@@ -289,13 +333,13 @@ bot.on("chat_join_request", async (ctx) => {
       if (ok === null) {
         await tryCallApi("sendMessage", {
           chat_id: applicant.id,
-          text: `${prompt}\n\nОтправьте голосовое сообщение сюда, в этот чат.`,
+          text: `${prompt}\n\n${t(lang, "voice_send_here")}`,
         });
       }
     } else {
       const dm = await tryCallApi("sendMessage", {
         chat_id: applicant.id,
-        text: `${prompt}\n\nОтправьте голосовое сообщение сюда, в этот чат.`,
+        text: `${prompt}\n\n${t(lang, "voice_send_here")}`,
       });
       if (dm === null) {
         logger.warn("voice screening: could not DM applicant", {
@@ -337,10 +381,11 @@ bot.on("chat_join_request", async (ctx) => {
 
   // Legacy path: DM the applicant a button to open the Mini App. Requires an
   // open DM with the bot; otherwise the session times out to the group action.
-  const keyboard = new InlineKeyboard().webApp("Пройти проверку", url);
+  const lang = normalizeLang(applicant.language_code);
+  const keyboard = new InlineKeyboard().webApp(t(lang, "pass_verification"), url);
   const dm = await tryCallApi("sendMessage", {
     chat_id: applicant.id,
-    text: "Проверка для вступления в группу.",
+    text: t(lang, "verify_to_join"),
     reply_markup: keyboard,
   });
   if (dm === null) {
@@ -363,8 +408,9 @@ bot.on("message:voice", async (ctx) => {
     orderBy: { createdAt: "desc" },
   });
   if (!session) return; // nothing awaiting a voice from this user
+  const lang = normalizeLang(ctx.from.language_code);
   if (session.expiresAt.getTime() < Date.now()) {
-    await ctx.reply("Время на проверку истекло.");
+    await ctx.reply(t(lang, "voice_time_up"));
     return;
   }
 
@@ -400,10 +446,10 @@ bot.on("message:voice", async (ctx) => {
   });
   if (sent === null) {
     logger.error("voice screening: could not deliver to owner", { sessionId: session.id });
-    await ctx.reply("Не удалось отправить владельцу. Попробуйте позже.");
+    await ctx.reply(t(lang, "voice_deliver_failed"));
     return;
   }
-  await ctx.reply("Голосовое отправлено на проверку. Ожидайте решения.");
+  await ctx.reply(t(lang, "voice_sent_wait"));
 });
 
 // Owner decides on a voice-screening applicant from the inline buttons.
@@ -475,6 +521,23 @@ bot.on("my_chat_member", async (ctx) => {
     (status === "administrator" || status === "member") &&
     (upd.chat.type === "group" || upd.chat.type === "supergroup")
   ) {
+    // Unbypassable ban: if the person who added the bot, or the group's bound
+    // owner, is globally banned, leave immediately and never connect/screen.
+    const existing = await prisma.group.findUnique({ where: { chatId } });
+    const adderBanned = await isBanned(BigInt(upd.from.id));
+    const ownerBanned = existing ? await isBanned(existing.ownerUserId) : false;
+    if (adderBanned || ownerBanned) {
+      await tryCallApi("leaveChat", { chat_id: Number(chatId) });
+      await markGroupRemoved(chatId);
+      logger.info("left chat: banned adder/owner", {
+        chatId: chatId.toString(),
+        by: upd.from.id,
+        adderBanned,
+        ownerBanned,
+      });
+      return;
+    }
+
     try {
       await connectGroup({
         chatId,

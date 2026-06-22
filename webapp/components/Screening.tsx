@@ -38,9 +38,9 @@ const decisionText = (decision: string): string =>
 const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 export function Screening({ sessionId }: { sessionId: string | null }) {
-  const [state, setState] = useState<"loading" | "gate" | "form" | "voice" | "done" | "error">(
-    "loading"
-  );
+  const [state, setState] = useState<
+    "loading" | "gate" | "form" | "voice" | "done" | "error" | "banned"
+  >("loading");
   const [error, setError] = useState<string>("");
   const [blocks, setBlocks] = useState<ScenarioBlock[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -75,6 +75,10 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
         setState("form");
       }
     } catch (e) {
+      if ((e as ApiError).code === "banned") {
+        setState("banned");
+        return;
+      }
       setState("error");
       setError((e as ApiError).message || t("load_failed"));
     }
@@ -134,6 +138,8 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
   );
 
   if (state === "loading") return <Loading text={t("loading")} />;
+  if (state === "banned")
+    return <Message title={t("banned_title")} text={t("banned_text")} gif={GIF.ban} />;
   if (state === "error") return <Message title={t("unavailable_title")} text={error} gif={GIF.empty} />;
   if (state === "done")
     return (

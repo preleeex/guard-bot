@@ -3,6 +3,8 @@ import { prisma } from "../db";
 import { getBotId, getChat, getChatMember, tryCallApi } from "../telegram/api";
 import { canAddGroup } from "./quota";
 import { sendSystemLog } from "../telegram/systemLog";
+import { logger } from "../logger";
+import { t, normalizeLang } from "../i18n";
 
 export class GroupError extends Error {
   constructor(public code: string, message: string) {
@@ -133,6 +135,9 @@ export async function updateSettings(
     voiceScreening?: boolean;
     voicePrompt?: string | null;
     emojiGate?: boolean;
+    welcomeEnabled?: boolean;
+    welcomeText?: string | null;
+    welcomeDeleteSeconds?: number | null;
   }
 ) {
   await assertOwnerOf(chatId, userId);
@@ -148,6 +153,11 @@ export async function updateSettings(
       ...(data.voiceScreening !== undefined ? { voiceScreening: data.voiceScreening } : {}),
       ...(data.voicePrompt !== undefined ? { voicePrompt: data.voicePrompt } : {}),
       ...(data.emojiGate !== undefined ? { emojiGate: data.emojiGate } : {}),
+      ...(data.welcomeEnabled !== undefined ? { welcomeEnabled: data.welcomeEnabled } : {}),
+      ...(data.welcomeText !== undefined ? { welcomeText: data.welcomeText } : {}),
+      ...(data.welcomeDeleteSeconds !== undefined
+        ? { welcomeDeleteSeconds: data.welcomeDeleteSeconds == null ? null : Math.max(0, data.welcomeDeleteSeconds) }
+        : {}),
     },
   });
 }
@@ -169,43 +179,140 @@ export async function setEmojiStatus(
   });
 }
 
-// Self-check a group's setup so the owner can see why guard might do nothing:
-// the bot must be an admin able to approve members, and the group must require
-// join approval (join requests). Returns a structured report.
-export async function checkGroupSetup(
-  chatId: bigint,
-  userId: bigint
-): Promise<{
-  botAdmin: boolean;
-  canApprove: boolean;
-  joinByRequest: boolean;
-  guardEnabled: boolean;
+export interface SetupCheckItem {
+  key: string;
   ok: boolean;
-}> {
+}
+
+export interface SetupReport {
+  items: SetupCheckItem[];
+  ok: boolean;
+}
+
+// Self-check a group's setup so the owner can see why guard might do nothing.
+// Each item is returned as a key (the Mini App maps keys to localized text) plus
+// an ok flag.
+export async function checkGroupSetup(chatId: bigint, userId: bigint): Promise<SetupReport> {
   const group = await assertOwnerOf(chatId, userId);
 
   let botAdmin = false;
   let canApprove = false;
+  let notAnonymous = true; // assume fine unless we learn otherwise
   let joinByRequest = false;
+  let guardBotAssigned = false;
 
   try {
     const botId = await getBotId();
     const member = await getChatMember(chatId, botId);
     botAdmin = member.status === "administrator" || member.status === "creator";
     canApprove = botAdmin && member.can_invite_users === true;
+    notAnonymous = !(botAdmin && member.is_anonymous === true);
+    try {
+      const info = await getChat(Number(chatId));
+      joinByRequest = info.join_by_request === true;
+      guardBotAssigned = info.guard_bot?.id === botId;
+    } catch {
+      // chat info unreadable
+    }
   } catch {
-    // Bot likely not in the chat; leave both false.
+    // Bot likely not in the chat; leave defaults.
   }
 
+  const scenarioBlocks = await prisma.scenarioBlock.count({ where: { chatId } });
+  const scenarioReady = scenarioBlocks > 0;
+
+  const items: SetupCheckItem[] = [
+    { key: "bot_admin", ok: botAdmin },
+    { key: "can_approve", ok: canApprove },
+    { key: "not_anonymous", ok: notAnonymous },
+    { key: "join_by_request", ok: joinByRequest },
+    { key: "guard_bot", ok: guardBotAssigned },
+    { key: "scenario", ok: scenarioReady },
+    { key: "guard_enabled", ok: group.guardEnabled },
+  ];
+  const ok = items.every((i) => i.ok);
+  return { items, ok };
+}
+
+// Notify the owner once (with anti-spam dedup) when the guard bot got
+// unassigned while guard is enabled. Telegram resets the guard bot whenever the
+// bot's admin rights are edited, so this is a common silent failure.
+export async function nudgeGuardIfNeeded(chatId: bigint, minHoursBetween = 6): Promise<void> {
+  const group = await prisma.group.findUnique({ where: { chatId } });
+  if (!group || group.removedAt || !group.guardEnabled) return;
+
+  let assigned = false;
   try {
+    const botId = await getBotId();
     const info = await getChat(Number(chatId));
-    joinByRequest = info.join_by_request === true;
+    assigned = info.guard_bot?.id === botId;
   } catch {
-    // join_by_request unreadable; leave false.
+    return; // cannot read chat; do not nudge on uncertainty
+  }
+  if (assigned) {
+    // Clear the dedup marker so a future drop nudges again.
+    if (group.guardNudgedAt) {
+      await prisma.group.update({ where: { chatId }, data: { guardNudgedAt: null } });
+    }
+    return;
   }
 
-  const ok = botAdmin && canApprove && joinByRequest;
-  return { botAdmin, canApprove, joinByRequest, guardEnabled: group.guardEnabled, ok };
+  const now = Date.now();
+  if (group.guardNudgedAt && now - group.guardNudgedAt.getTime() < minHoursBetween * 3_600_000) {
+    return;
+  }
+
+  const owner = await prisma.user.findUnique({ where: { id: group.ownerUserId } });
+  const lang = normalizeLang(owner?.language);
+  const sent = await tryCallApi("sendMessage", {
+    chat_id: Number(group.ownerUserId),
+    text: t(lang, "guard_nudge", { title: group.title ?? String(chatId) }),
+  });
+  if (sent !== null) {
+    await prisma.group.update({ where: { chatId }, data: { guardNudgedAt: new Date() } });
+    logger.info("guard nudge sent", { chatId: chatId.toString() });
+  }
+}
+
+// Escape text for Telegram HTML parse mode.
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Post the configured welcome message in the group after a member is approved,
+// mentioning the new member. Optionally auto-deletes after N seconds. Best
+// effort: any failure is logged and swallowed.
+export async function sendWelcome(
+  chatId: bigint,
+  applicantUserId: bigint,
+  name?: string | null,
+  username?: string | null
+): Promise<void> {
+  const group = await prisma.group.findUnique({ where: { chatId } });
+  if (!group || !group.welcomeEnabled || !group.welcomeText?.trim()) return;
+
+  const display = escapeHtml(name?.trim() || (username ? `@${username}` : "участник"));
+  const mention = `<a href="tg://user?id=${applicantUserId}">${display}</a>`;
+  // {name} is replaced by the mention; otherwise the mention is prefixed.
+  const body = group.welcomeText.includes("{name}")
+    ? group.welcomeText.replace(/\{name\}/g, mention)
+    : `${mention}, ${group.welcomeText}`;
+
+  const sent = await tryCallApi<{ message_id: number }>("sendMessage", {
+    chat_id: Number(chatId),
+    text: body,
+    parse_mode: "HTML",
+  });
+  if (sent === null) {
+    logger.warn("welcome send failed", { chatId: chatId.toString() });
+    return;
+  }
+  const ttl = group.welcomeDeleteSeconds;
+  if (ttl && ttl > 0 && sent.message_id) {
+    setTimeout(() => {
+      void tryCallApi("deleteMessage", { chat_id: Number(chatId), message_id: sent.message_id });
+    }, ttl * 1000).unref?.();
+  }
 }
 
 // Mark a group as removed when the bot is kicked or leaves. The binding row is

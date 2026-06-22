@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { applyTheme, applySafeArea, getWebApp, isInTelegram } from "@/lib/telegram";
+import { t } from "@/lib/i18n";
 import { GIF } from "@/lib/assets";
 import { Loading, Message } from "@/components/ui";
 import { Screening } from "@/components/Screening";
 import { OwnerApp } from "@/components/Owner";
 
-type Mode = "screening" | "owner";
+type Mode = "screening" | "owner" | "info";
 
 export default function Page() {
   const [ready, setReady] = useState(false);
   const [inTelegram, setInTelegram] = useState(true);
   const [mode, setMode] = useState<Mode>("owner");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [infoReason, setInfoReason] = useState<string>("");
   const [ownerNav, setOwnerNav] = useState<{ chatId: string; journalUserId?: string } | null>(null);
 
   useEffect(() => {
@@ -48,7 +50,10 @@ export default function Page() {
     const session =
       params.get("session") || (startParam.startsWith("screening:") ? startParam.slice(10) : "");
 
-    if (params.get("mode") === "screening" || session) {
+    if (params.get("mode") === "info") {
+      setMode("info");
+      setInfoReason(params.get("reason") || "");
+    } else if (params.get("mode") === "screening" || session) {
       setMode("screening");
       setSessionId(session || null);
     } else {
@@ -68,6 +73,16 @@ export default function Page() {
         title="Откройте через Telegram"
         text="Это приложение работает только внутри Telegram."
         gif={GIF.ban}
+      />
+    );
+  }
+  if (mode === "info") {
+    const isEmoji = infoReason === "emoji";
+    return (
+      <Message
+        title={isEmoji ? t("reason_emoji_title") : t("reason_generic_title")}
+        text={isEmoji ? t("reason_emoji_text") : t("reason_generic_text")}
+        gif={GIF.empty}
       />
     );
   }

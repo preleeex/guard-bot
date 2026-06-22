@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { openExternal, getProfile, getInitData } from "@/lib/telegram";
 import { ADD_TO_GROUP_LINK } from "@/lib/config";
+import { t, setLang, initLang, getLang, type Lang } from "@/lib/i18n";
 import { GIF } from "@/lib/assets";
 import type { Group, QuotaStatus } from "@/lib/types";
-import { Avatar, Button, Card, ErrorState, Loading, SectionHeader, StateGif } from "./ui";
+import { Avatar, Button, Card, ErrorState, Loading, Message, SectionHeader, StateGif } from "./ui";
 import { UsersIcon, PlusIcon, CoinIcon, StarIcon, ShieldIcon, GroupAddIcon, HelpIcon } from "./icons";
 import { GroupDetail } from "./GroupDetail";
 import { AdminPanel } from "./Admin";
@@ -27,6 +28,7 @@ interface HomeData {
   subscription?: Subscription;
   quota: QuotaStatus;
   groups: Group[];
+  language?: string;
 }
 
 function SubscriptionGate({ sub, onCheck }: { sub: Subscription; onCheck: () => void }) {
@@ -59,12 +61,19 @@ export function OwnerApp({
   const [data, setData] = useState<HomeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [banned, setBanned] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
     try {
-      setData(await api.get<HomeData>("/api/owner/home"));
+      const home = await api.get<HomeData>(`/api/owner/home?lang=${getLang()}`);
+      initLang(home.language);
+      setData(home);
     } catch (e) {
+      if ((e as ApiError).code === "banned") {
+        setBanned(true);
+        return;
+      }
       setError((e as ApiError).message || "Не удалось загрузить.");
     } finally {
       setLoading(false);
@@ -93,6 +102,7 @@ export function OwnerApp({
     };
   }, [load]);
 
+  if (banned) return <Message title={t("banned_title")} text={t("banned_text")} gif={GIF.ban} />;
   if (loading && !data) return <Loading />;
   if (error && !data)
     return (
@@ -216,6 +226,17 @@ function Home({
     }
   };
 
+  const switchLang = async (l: Lang) => {
+    if (l === getLang()) return;
+    setLang(l);
+    try {
+      await api.post("/api/owner/language", { language: l });
+    } catch {
+      // best effort: local choice still applies
+    }
+    window.location.reload();
+  };
+
   return (
     <div className="app has-bottom-nav">
       <div className="profile-bar">
@@ -336,6 +357,26 @@ function Home({
       {tab === "admin" && isOperator ? <AdminPanel /> : null}
 
       {tab === "help" ? (
+        <>
+        <Card>
+          <p className="subtitle">{t("language")}</p>
+          <div className="row" style={{ gap: 8 }}>
+            <Button
+              small
+              variant={getLang() === "ru" ? "primary" : "secondary"}
+              onClick={() => switchLang("ru")}
+            >
+              Русский
+            </Button>
+            <Button
+              small
+              variant={getLang() === "en" ? "primary" : "secondary"}
+              onClick={() => switchLang("en")}
+            >
+              English
+            </Button>
+          </div>
+        </Card>
         <Card>
           <SectionHeader icon={<HelpIcon />} title="Как пользоваться" />
           <div className="col help-list">
@@ -358,6 +399,7 @@ function Home({
             </p>
           </div>
         </Card>
+        </>
       ) : null}
 
       <nav className="bottom-nav">

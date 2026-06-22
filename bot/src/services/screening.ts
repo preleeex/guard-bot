@@ -15,6 +15,7 @@ import {
 import { getScenario } from "./scenarios";
 import { addJournalEntry } from "./journal";
 import { isBanned } from "./moderation";
+import { sendWelcome, assertOwnerOf } from "./groups";
 import { decide, evaluateBlock } from "./evaluation";
 import type {
   BlockAnswer,
@@ -186,6 +187,8 @@ export async function applyJoinDecision(
     queryId: string | null;
     chatId: bigint;
     applicantUserId: bigint;
+    applicantUsername?: string | null;
+    applicantName?: string | null;
     challenge?: unknown;
   },
   decision: Decision
@@ -194,6 +197,7 @@ export async function applyJoinDecision(
   if (session.mode === "member") {
     if (decision === "approve") {
       await unmuteMember(session.chatId, session.applicantUserId);
+      await sendWelcome(session.chatId, session.applicantUserId, session.applicantName, session.applicantUsername);
     } else if (decision === "decline") {
       await kickMember(session.chatId, session.applicantUserId);
     }
@@ -205,11 +209,15 @@ export async function applyJoinDecision(
 
   if (session.mode === "query" && session.queryId) {
     await answerChatJoinRequestQuery(session.queryId, decision as JoinDecision);
+    if (decision === "approve") {
+      await sendWelcome(session.chatId, session.applicantUserId, session.applicantName, session.applicantUsername);
+    }
     return;
   }
   // legacy mode
   if (decision === "approve") {
     await approveChatJoinRequest(session.chatId, session.applicantUserId);
+    await sendWelcome(session.chatId, session.applicantUserId, session.applicantName, session.applicantUsername);
   } else if (decision === "decline") {
     await declineChatJoinRequest(session.chatId, session.applicantUserId);
   }
@@ -433,29 +441,170 @@ export async function purgeOldData(opts?: {
 
 // --- per-group statistics (owner-facing) -----------------------------------
 
-export async function getGroupStats(chatId: bigint): Promise<{
+export type StatsPeriod = "today" | "7d" | "all";
+
+function periodStart(period: StatsPeriod): Date | null {
+  if (period === "all") return null;
+  if (period === "today") {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  return new Date(Date.now() - 7 * 86_400_000);
+}
+
+export async function getGroupStats(
+  chatId: bigint,
+  period: StatsPeriod = "all"
+): Promise<{
+  period: StatsPeriod;
   total: number;
   approve: number;
   decline: number;
   queue: number;
   timeout: number;
-  last7d: number;
+  conversion: number; // approve / total, 0..100
 }> {
+  const start = periodStart(period);
   const rows = await prisma.journalEntry.groupBy({
     by: ["decision"],
-    where: { chatId },
+    where: { chatId, ...(start ? { finishedAt: { gte: start } } : {}) },
     _count: { _all: true },
   });
   const counts: Record<string, number> = {};
   for (const r of rows) counts[r.decision] = r._count._all;
-  const last7d = await prisma.journalEntry.count({
-    where: { chatId, finishedAt: { gt: new Date(Date.now() - 7 * 86_400_000) } },
-  });
   const approve = counts.approve ?? 0;
   const decline = counts.decline ?? 0;
   const queue = counts.queue ?? 0;
   const timeout = counts.timeout ?? 0;
-  return { total: approve + decline + queue + timeout, approve, decline, queue, timeout, last7d };
+  const total = approve + decline + queue + timeout;
+  const conversion = total === 0 ? 0 : Math.round((approve / total) * 100);
+  return { period, total, approve, decline, queue, timeout, conversion };
+}
+
+// --- manual review queue (owner-facing) ------------------------------------
+
+export interface QueueItem {
+  id: string;
+  kind: "voice" | "pending";
+  applicantUserId: string;
+  applicantUsername: string | null;
+  applicantName: string | null;
+  createdAt: Date;
+}
+
+// List items awaiting a manual decision: voice messages under review and join
+// requests that were routed to the manual queue.
+export async function listManualQueue(chatId: bigint, ownerUserId: bigint): Promise<QueueItem[]> {
+  await assertOwnerOf(chatId, ownerUserId);
+
+  const voice = await prisma.screeningSession.findMany({
+    where: { chatId, mode: "voice", status: "awaiting_review" },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+
+  const queued = await prisma.journalEntry.findMany({
+    where: { chatId, decision: "queue" },
+    orderBy: { finishedAt: "desc" },
+    take: 50,
+  });
+  // Drop queued entries that were later resolved (a newer entry for the same
+  // applicant with a terminal decision exists).
+  const resolved = new Set(
+    (
+      await prisma.journalEntry.findMany({
+        where: { chatId, decision: { in: ["approve", "decline"] } },
+        select: { applicantUserId: true },
+        take: 500,
+        orderBy: { finishedAt: "desc" },
+      })
+    ).map((e) => e.applicantUserId.toString())
+  );
+
+  const items: QueueItem[] = [];
+  for (const v of voice) {
+    items.push({
+      id: v.id,
+      kind: "voice",
+      applicantUserId: v.applicantUserId.toString(),
+      applicantUsername: v.applicantUsername,
+      applicantName: v.applicantName,
+      createdAt: v.createdAt,
+    });
+  }
+  const seen = new Set<string>();
+  for (const q of queued) {
+    const uid = q.applicantUserId.toString();
+    if (resolved.has(uid) || seen.has(uid)) continue;
+    seen.add(uid);
+    items.push({
+      id: q.id,
+      kind: "pending",
+      applicantUserId: uid,
+      applicantUsername: q.applicantUsername,
+      applicantName: q.applicantName,
+      createdAt: q.finishedAt,
+    });
+  }
+  return items;
+}
+
+// Apply a manual decision from the Mini App queue. Idempotent: re-applying a
+// resolved item is a no-op and never double-acts.
+export async function applyQueueDecision(
+  chatId: bigint,
+  ownerUserId: bigint,
+  kind: "voice" | "pending",
+  id: string,
+  decision: "approve" | "decline"
+): Promise<{ ok: boolean }> {
+  await assertOwnerOf(chatId, ownerUserId);
+
+  if (kind === "voice") {
+    const session = await prisma.screeningSession.findUnique({ where: { id } });
+    if (!session || session.chatId !== chatId) throw new ScreeningError("not_found", "Не найдено.");
+    if (session.status === "completed") return { ok: true };
+    await prisma.screeningSession.update({ where: { id }, data: { status: "completed" } });
+    await applyJoinDecision(session, decision);
+    await addJournalEntry({
+      chatId,
+      applicantUserId: session.applicantUserId,
+      applicantUsername: session.applicantUsername,
+      applicantName: session.applicantName,
+      decision,
+      reason: "Ручное решение по голосовой проверке.",
+      answers: [],
+      startedAt: session.createdAt,
+    });
+    return { ok: true };
+  }
+
+  // pending: act on a queued join request by chat + user id.
+  const entry = await prisma.journalEntry.findUnique({ where: { id } });
+  if (!entry || entry.chatId !== chatId) throw new ScreeningError("not_found", "Не найдено.");
+  try {
+    if (decision === "approve") {
+      await approveChatJoinRequest(chatId, entry.applicantUserId);
+      await sendWelcome(chatId, entry.applicantUserId, entry.applicantName, entry.applicantUsername);
+    } else {
+      await declineChatJoinRequest(chatId, entry.applicantUserId);
+    }
+  } catch (err) {
+    // The request may already be resolved in Telegram; record intent anyway.
+    logger.warn("queue decision telegram call failed", { id, err: String(err) });
+  }
+  await addJournalEntry({
+    chatId,
+    applicantUserId: entry.applicantUserId,
+    applicantUsername: entry.applicantUsername,
+    applicantName: entry.applicantName,
+    decision,
+    reason: "Ручное решение из очереди.",
+    answers: [],
+    startedAt: entry.finishedAt,
+  });
+  return { ok: true };
 }
 
 export class ScreeningError extends Error {

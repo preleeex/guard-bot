@@ -19,6 +19,9 @@ model User {
   firstName        String?
   startedAt        DateTime @default(now())
   manualExtraSlots Int      @default(0)
+  // Preferred UI language ("ru" | "en"); null falls back to the Telegram client
+  // language. Set from the manual RU/EN switch in the owner panel.
+  language         String?
 
   ownedGroups Group[]
   payments    Payment[]
@@ -59,10 +62,19 @@ model Group {
   emojiGate     Boolean @default(false)
   emojiStatusId String?
 
-  owner   User            @relation(fields: [ownerUserId], references: [id])
-  blocks  ScenarioBlock[]
-  journal JournalEntry[]
+  // Welcome message posted in the group after a member is approved.
+  welcomeEnabled       Boolean @default(false)
+  welcomeText          String?
+  welcomeDeleteSeconds Int? // auto-delete the welcome after N seconds; null keeps it
+
+  // Anti-spam dedup for the "guard bot got unassigned" nudge DM to the owner.
+  guardNudgedAt DateTime?
+
+  owner    User              @relation(fields: [ownerUserId], references: [id])
+  blocks   ScenarioBlock[]
+  journal  JournalEntry[]
   sessions ScreeningSession[]
+  bans     GroupBan[]
 
   @@index([ownerUserId])
   @@map("groups")
@@ -159,6 +171,25 @@ model BannedUser {
   createdAt DateTime @default(now())
 
   @@map("banned_users")
+}
+
+// Per-group bans set by the group owner (independent of the global operator
+// ban). A user banned here has their join requests auto-declined for that group
+// only, without opening the Mini App.
+model GroupBan {
+  chatId    BigInt
+  userId    BigInt
+  reason    String?
+  username  String?
+  name      String?
+  createdBy BigInt?
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [chatId], references: [chatId], onDelete: Cascade)
+
+  @@id([chatId, userId])
+  @@index([chatId, createdAt])
+  @@map("group_bans")
 }
 
 // System-wide counters that are cheap to read for the admin view are derived by

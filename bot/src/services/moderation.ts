@@ -1,7 +1,7 @@
 import { prisma } from "../db";
 import { config, requiredChannelUrl } from "../config";
 import { getChatMember, getEmojiStatus, leaveChat } from "../telegram/api";
-import { markGroupRemoved } from "./groups";
+import { markGroupRemoved, assertOwnerOf } from "./groups";
 import { logger } from "../logger";
 
 // --- bans ------------------------------------------------------------------
@@ -53,7 +53,55 @@ export async function listBanned(limit = 100) {
   return prisma.bannedUser.findMany({ orderBy: { createdAt: "desc" }, take: limit });
 }
 
+// --- per-group bans (set by the group owner) -------------------------------
+
+export async function isGroupBanned(chatId: bigint, userId: bigint): Promise<boolean> {
+  const row = await prisma.groupBan.findUnique({
+    where: { chatId_userId: { chatId, userId } },
+  });
+  return Boolean(row);
+}
+
+export async function banInGroup(
+  chatId: bigint,
+  ownerUserId: bigint,
+  target: { userId: bigint; username?: string | null; name?: string | null; reason?: string | null }
+) {
+  await assertOwnerOf(chatId, ownerUserId);
+  return prisma.groupBan.upsert({
+    where: { chatId_userId: { chatId, userId: target.userId } },
+    update: { reason: target.reason ?? null, username: target.username ?? null, name: target.name ?? null },
+    create: {
+      chatId,
+      userId: target.userId,
+      username: target.username ?? null,
+      name: target.name ?? null,
+      reason: target.reason ?? null,
+      createdBy: ownerUserId,
+    },
+  });
+}
+
+export async function unbanFromGroup(chatId: bigint, ownerUserId: bigint, userId: bigint) {
+  await assertOwnerOf(chatId, ownerUserId);
+  await prisma.groupBan.deleteMany({ where: { chatId, userId } });
+}
+
+export async function listGroupBans(chatId: bigint, ownerUserId: bigint, limit = 200) {
+  await assertOwnerOf(chatId, ownerUserId);
+  return prisma.groupBan.findMany({
+    where: { chatId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+}
+
 // --- anti-raid (in-memory sliding window per chat) -------------------------
+//
+// LIMITATION: this state lives in process memory. It resets on redeploy and is
+// not shared across instances. The backend currently runs as a single instance,
+// so this is acceptable. If scaled horizontally, move the window/threshold into
+// the group settings and the counters into Redis or the database.
 
 const RAID_WINDOW_MS = 30_000;
 const RAID_THRESHOLD = 25; // join requests within the window

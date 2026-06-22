@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { logger } from "../../logger";
-import { requireInitData } from "../auth";
+import { requireInitData, requireNotBanned } from "../auth";
 import { getPublicScenario, submitScreening, ScreeningError } from "../../services/screening";
 import type { BlockAnswer } from "../../types/scenario";
 
 export const screeningRouter = Router();
-screeningRouter.use(requireInitData);
+screeningRouter.use(requireInitData, requireNotBanned);
 
 // Applicant fetches the scenario for their pending session (secrets stripped).
 screeningRouter.get("/:sessionId", async (req, res) => {

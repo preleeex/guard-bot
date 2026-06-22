@@ -13,6 +13,7 @@ import type {
 import { Button, IconButton } from "./ui";
 import { ArrowUpIcon, ArrowDownIcon, TrashIcon, ShieldIcon, QuizIcon, JournalIcon, UploadIcon } from "./icons";
 import { pickImage } from "@/lib/image";
+import { t } from "@/lib/i18n";
 
 function blockIcon(type: string) {
   if (type === "captcha") return <ShieldIcon size={18} />;
@@ -49,6 +50,49 @@ function newBlock(type: string): ScenarioBlock {
   return { id: uid(), type: "rules", config: { text: "" } as RulesConfig };
 }
 
+// Quick-start presets. Each returns a fresh set of blocks.
+const TEMPLATES: { key: "tpl_simple" | "tpl_captcha_rules" | "tpl_quiz3" | "tpl_max"; build: () => ScenarioBlock[] }[] = [
+  {
+    key: "tpl_simple",
+    build: () => [{ id: uid(), type: "captcha", config: { kind: "math" } as CaptchaConfig }],
+  },
+  {
+    key: "tpl_captcha_rules",
+    build: () => [
+      { id: uid(), type: "captcha", config: { kind: "math" } as CaptchaConfig },
+      { id: uid(), type: "rules", config: { text: "" } as RulesConfig },
+    ],
+  },
+  {
+    key: "tpl_quiz3",
+    build: () => [
+      {
+        id: uid(),
+        type: "quiz",
+        config: {
+          passCount: 2,
+          questions: [1, 2, 3].map(() => ({ id: uid(), text: "", options: ["", ""], correct: [] })),
+        } as QuizConfig,
+      },
+    ],
+  },
+  {
+    key: "tpl_max",
+    build: () => [
+      { id: uid(), type: "captcha", config: { kind: "visual" } as CaptchaConfig },
+      { id: uid(), type: "rules", config: { text: "" } as RulesConfig },
+      {
+        id: uid(),
+        type: "quiz",
+        config: {
+          passCount: 1,
+          questions: [{ id: uid(), text: "", options: ["", ""], correct: [] }],
+        } as QuizConfig,
+      },
+    ],
+  },
+];
+
 // The no-code scenario constructor. Add, edit, reorder and delete blocks of any
 // type and in any number. New block types only need a new editor branch here.
 export function ScenarioBuilder({
@@ -71,8 +115,24 @@ export function ScenarioBuilder({
     onChange(next);
   };
 
+  const applyTemplate = (build: () => ScenarioBlock[]) => {
+    if (blocks.length > 0 && !window.confirm(t("tpl_replace_confirm"))) return;
+    onChange(build());
+  };
+
   return (
     <div className="col">
+      <div className="card">
+        <p className="subtitle">{t("templates_title")}</p>
+        <div className="add-block-grid">
+          {TEMPLATES.map((tpl) => (
+            <button key={tpl.key} className="add-block" onClick={() => applyTemplate(tpl.build)}>
+              <span>{t(tpl.key)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {blocks.map((block, idx) => (
         <div className="card" key={block.id}>
           <div className="row">

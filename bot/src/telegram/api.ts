@@ -68,6 +68,8 @@ export interface ChatMember {
   status: "creator" | "administrator" | "member" | "restricted" | "left" | "kicked";
   user: { id: number; username?: string; first_name?: string };
   can_invite_users?: boolean;
+  // Admins only: an anonymous admin breaks guard mode (no per-user actions).
+  is_anonymous?: boolean;
 }
 
 export async function getChatMember(

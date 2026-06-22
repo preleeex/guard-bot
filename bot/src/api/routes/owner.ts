@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { config, FREE_GROUP_SLOTS } from "../../config";
 import { logger } from "../../logger";
-import { requireInitData, validateInitData } from "../auth";
+import { prisma } from "../../db";
+import { requireInitData, requireNotBanned, validateInitData } from "../auth";
 import {
   getChat,
   getEmojiStatus,
@@ -21,10 +22,21 @@ import {
   GroupError,
 } from "../../services/groups";
 import { getScenario, saveScenario } from "../../services/scenarios";
-import { getGroupStats } from "../../services/screening";
+import {
+  getGroupStats,
+  listManualQueue,
+  applyQueueDecision,
+  type StatsPeriod,
+} from "../../services/screening";
 import { listJournal } from "../../services/journal";
 import { getQuota } from "../../services/quota";
-import { checkSubscription } from "../../services/moderation";
+import {
+  checkSubscription,
+  banInGroup,
+  unbanFromGroup,
+  listGroupBans,
+} from "../../services/moderation";
+import { normalizeLang } from "../../i18n";
 
 // "Premium" owners (bought slots or unlimited, i.e. able to run >3 groups) get
 // access to the emoji-status gate.
@@ -65,33 +77,90 @@ ownerRouter.get("/avatar", async (req, res) => {
   }
 });
 
-ownerRouter.use(requireInitData);
+// Voice recording proxy for the manual queue. Public like the avatar proxy
+// (an <audio> tag cannot send headers): validated initData is passed as `i`, and
+// ownership of the group is enforced before streaming.
+ownerRouter.get("/groups/:chatId/queue/voice/:sessionId", async (req, res) => {
+  try {
+    const v = validateInitData(String(req.query.i ?? ""));
+    if (!v.ok || !v.user) {
+      res.sendStatus(401);
+      return;
+    }
+    const chatId = parseChatId(req.params.chatId);
+    await assertOwnerOf(chatId, v.user.id);
+    const session = await prisma.screeningSession.findUnique({ where: { id: req.params.sessionId } });
+    if (!session || session.chatId !== chatId || !session.voiceFileId) {
+      res.sendStatus(404);
+      return;
+    }
+    const filePath = await getFilePath(session.voiceFileId);
+    if (!filePath) {
+      res.sendStatus(404);
+      return;
+    }
+    const tgRes = await fetch(`${FILE_ROOT}/${filePath}`);
+    if (!tgRes.ok) {
+      res.sendStatus(404);
+      return;
+    }
+    res.setHeader("Content-Type", tgRes.headers.get("content-type") ?? "audio/ogg");
+    res.setHeader("Cache-Control", "private, max-age=600");
+    res.send(Buffer.from(await tgRes.arrayBuffer()));
+  } catch (err) {
+    logger.warn("voice proxy failed", { err: String(err) });
+    res.sendStatus(404);
+  }
+});
+
+ownerRouter.use(requireInitData, requireNotBanned);
 
 function parseChatId(raw: string): bigint {
   return BigInt(raw);
 }
 
+// Resolve the effective UI language for the user: stored preference first, then
+// the Telegram client language passed by the Mini App, then Russian.
+async function resolveLanguage(userId: bigint, clientLang?: string): Promise<string> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { language: true } });
+  return normalizeLang(user?.language ?? clientLang);
+}
+
 // Identify the current user and whether they are the bot operator.
-ownerRouter.get("/me", (req, res) => {
+ownerRouter.get("/me", async (req, res) => {
   res.json({
     userId: req.tgUser!.id.toString(),
     isOperator: req.isOwnerOperator === true,
+    language: await resolveLanguage(req.tgUser!.id, String(req.query.lang ?? "")),
   });
+});
+
+// Save the user's manual UI language choice ("ru" | "en").
+ownerRouter.post("/language", async (req, res) => {
+  const language = normalizeLang(String(req.body?.language ?? ""));
+  await prisma.user.upsert({
+    where: { id: req.tgUser!.id },
+    update: { language },
+    create: { id: req.tgUser!.id, language },
+  });
+  res.json({ language });
 });
 
 // Single call that powers the owner home screen: operator flag, quota, groups.
 // Combining these into one request keeps the initial load fast.
 ownerRouter.get("/home", async (req, res) => {
   const userId = req.tgUser!.id;
-  const [quota, groups, subscription] = await Promise.all([
+  const [quota, groups, subscription, language] = await Promise.all([
     getQuota(userId),
     listGroups(userId),
     checkSubscription(userId),
+    resolveLanguage(userId, String(req.query.lang ?? "")),
   ]);
   res.json({
     isOperator: req.isOwnerOperator === true,
     maintenance: config.maintenance,
     subscription,
+    language,
     quota: {
       ...quota,
       totalSlots: quota.unlimited ? null : quota.totalSlots,
@@ -184,6 +253,14 @@ ownerRouter.patch("/groups/:chatId", async (req, res) => {
       voiceScreening: typeof body.voiceScreening === "boolean" ? body.voiceScreening : undefined,
       voicePrompt: typeof body.voicePrompt === "string" ? body.voicePrompt : undefined,
       emojiGate: typeof body.emojiGate === "boolean" ? body.emojiGate : undefined,
+      welcomeEnabled: typeof body.welcomeEnabled === "boolean" ? body.welcomeEnabled : undefined,
+      welcomeText: typeof body.welcomeText === "string" ? body.welcomeText : undefined,
+      welcomeDeleteSeconds:
+        body.welcomeDeleteSeconds === null
+          ? null
+          : typeof body.welcomeDeleteSeconds === "number"
+          ? body.welcomeDeleteSeconds
+          : undefined,
     });
     res.json({ group });
   } catch (err) {
@@ -246,13 +323,97 @@ ownerRouter.get("/groups/:chatId/check", async (req, res) => {
   }
 });
 
-// Per-group statistics for the owner.
+// Per-group statistics for the owner. ?period=today|7d|all (default all).
 ownerRouter.get("/groups/:chatId/stats", async (req, res) => {
   try {
     const chatId = parseChatId(req.params.chatId);
     await assertOwnerOf(chatId, req.tgUser!.id);
-    const stats = await getGroupStats(chatId);
+    const raw = String(req.query.period ?? "all");
+    const period: StatsPeriod = raw === "today" || raw === "7d" ? raw : "all";
+    const stats = await getGroupStats(chatId, period);
     res.json(stats);
+  } catch (err) {
+    handleGroupError(err, res);
+  }
+});
+
+// Manual review queue: items awaiting a decision.
+ownerRouter.get("/groups/:chatId/queue", async (req, res) => {
+  try {
+    const chatId = parseChatId(req.params.chatId);
+    const items = await listManualQueue(chatId, req.tgUser!.id);
+    res.json({ items });
+  } catch (err) {
+    handleGroupError(err, res);
+  }
+});
+
+// Apply a manual decision from the queue.
+ownerRouter.post("/groups/:chatId/queue/decision", async (req, res) => {
+  try {
+    const chatId = parseChatId(req.params.chatId);
+    const kind = req.body?.kind === "voice" ? "voice" : "pending";
+    const id = String(req.body?.id ?? "");
+    const decision = req.body?.decision === "approve" ? "approve" : "decline";
+    if (!id) {
+      res.status(400).json({ error: "invalid_input" });
+      return;
+    }
+    const result = await applyQueueDecision(chatId, req.tgUser!.id, kind, id, decision);
+    res.json(result);
+  } catch (err) {
+    handleGroupError(err, res);
+  }
+});
+
+// Per-group bans set by the owner.
+ownerRouter.get("/groups/:chatId/bans", async (req, res) => {
+  try {
+    const chatId = parseChatId(req.params.chatId);
+    const bans = await listGroupBans(chatId, req.tgUser!.id);
+    res.json({
+      bans: bans.map((b) => ({
+        userId: b.userId.toString(),
+        username: b.username,
+        name: b.name,
+        reason: b.reason,
+        createdAt: b.createdAt,
+      })),
+    });
+  } catch (err) {
+    handleGroupError(err, res);
+  }
+});
+
+ownerRouter.post("/groups/:chatId/bans", async (req, res) => {
+  try {
+    const chatId = parseChatId(req.params.chatId);
+    const userIdRaw = String(req.body?.userId ?? "");
+    if (!/^\d+$/.test(userIdRaw)) {
+      res.status(400).json({ error: "invalid_input" });
+      return;
+    }
+    await banInGroup(chatId, req.tgUser!.id, {
+      userId: BigInt(userIdRaw),
+      username: typeof req.body?.username === "string" ? req.body.username : null,
+      name: typeof req.body?.name === "string" ? req.body.name : null,
+      reason: typeof req.body?.reason === "string" ? req.body.reason.trim() || null : null,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    handleGroupError(err, res);
+  }
+});
+
+ownerRouter.delete("/groups/:chatId/bans/:userId", async (req, res) => {
+  try {
+    const chatId = parseChatId(req.params.chatId);
+    if (!/^\d+$/.test(req.params.userId)) {
+      res.status(400).json({ error: "invalid_input" });
+      return;
+    }
+    await unbanFromGroup(chatId, req.tgUser!.id, BigInt(req.params.userId));
+    res.json({ ok: true });
   } catch (err) {
     handleGroupError(err, res);
   }

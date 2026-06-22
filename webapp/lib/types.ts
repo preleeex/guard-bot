@@ -67,6 +67,9 @@ export interface Group {
   voicePrompt: string | null;
   emojiGate: boolean;
   emojiStatusId: string | null;
+  welcomeEnabled: boolean;
+  welcomeText: string | null;
+  welcomeDeleteSeconds: number | null;
   _count?: { blocks: number };
 }
 
