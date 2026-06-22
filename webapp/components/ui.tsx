@@ -21,8 +21,14 @@ export function InfoTip({ text }: { text: string }) {
   );
 }
 
-export function Card({ children }: { children: React.ReactNode }) {
-  return <div className="card">{children}</div>;
+export function Card({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <div className={["card", className].filter(Boolean).join(" ")}>{children}</div>;
 }
 
 export function Button({

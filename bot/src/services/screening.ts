@@ -387,6 +387,7 @@ export async function submitScreening(
 
   await notifyOwnerDecision({
     ownerUserId: group.ownerUserId,
+    chatId: session.chatId,
     chatTitle: group.title,
     applicantUserId: session.applicantUserId,
     applicantUsername: session.applicantUsername,
@@ -440,6 +441,7 @@ export async function expireDueSessions(): Promise<number> {
     if (group) {
       await notifyOwnerDecision({
         ownerUserId: group.ownerUserId,
+        chatId: session.chatId,
         chatTitle: group.title,
         applicantUserId: session.applicantUserId,
         applicantUsername: session.applicantUsername,
@@ -453,9 +455,11 @@ export async function expireDueSessions(): Promise<number> {
   return handled;
 }
 
-// DM the group owner about a screening decision, with a profile button.
+// DM the group owner about a screening decision, with profile and journal
+// buttons. "Журнал" opens the Mini App straight at this person's record.
 async function notifyOwnerDecision(params: {
   ownerUserId: bigint;
+  chatId: bigint;
   chatTitle?: string | null;
   applicantUserId: bigint;
   applicantUsername?: string | null;
@@ -482,9 +486,16 @@ async function notifyOwnerDecision(params: {
     params.reason,
   ].filter(Boolean);
 
-  const reply_markup = params.applicantUsername
-    ? { inline_keyboard: [[{ text: "Профиль", url: `https://t.me/${params.applicantUsername}` }]] }
-    : undefined;
+  const journalUrl =
+    `${config.miniAppUrl}/?mode=owner` +
+    `&group=${encodeURIComponent(params.chatId.toString())}` +
+    `&journal=${encodeURIComponent(params.applicantUserId.toString())}`;
+  const row: Record<string, unknown>[] = [];
+  if (params.applicantUsername) {
+    row.push({ text: "Профиль", url: `https://t.me/${params.applicantUsername}` });
+  }
+  row.push({ text: "Журнал", web_app: { url: journalUrl } });
+  const reply_markup = { inline_keyboard: [row] };
 
   await tryCallApi("sendMessage", {
     chat_id: Number(params.ownerUserId),

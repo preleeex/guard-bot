@@ -11,7 +11,7 @@ import { UsersIcon, PlusIcon, CoinIcon, StarIcon, ShieldIcon, GroupAddIcon, Help
 import { GroupDetail } from "./GroupDetail";
 import { AdminPanel } from "./Admin";
 
-type View = { name: "home" } | { name: "group"; chatId: string };
+type View = { name: "home" } | { name: "group"; chatId: string; journalUserId?: string };
 type Tab = "groups" | "billing" | "admin" | "help";
 
 interface Subscription {
@@ -48,8 +48,14 @@ function SubscriptionGate({ sub, onCheck }: { sub: Subscription; onCheck: () => 
   );
 }
 
-export function OwnerApp() {
-  const [view, setView] = useState<View>({ name: "home" });
+export function OwnerApp({
+  initialNav,
+}: {
+  initialNav?: { chatId: string; journalUserId?: string } | null;
+}) {
+  const [view, setView] = useState<View>(
+    initialNav ? { name: "group", chatId: initialNav.chatId, journalUserId: initialNav.journalUserId } : { name: "home" }
+  );
   const [data, setData] = useState<HomeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -129,6 +135,7 @@ export function OwnerApp() {
     return (
       <GroupDetail
         chatId={view.chatId}
+        initialJournalUserId={view.journalUserId}
         onBack={() => {
           setView({ name: "home" });
           load();

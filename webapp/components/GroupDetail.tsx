@@ -18,12 +18,20 @@ const decisionLabel: Record<string, string> = {
   timeout: "Таймаут",
 };
 
-export function GroupDetail({ chatId, onBack }: { chatId: string; onBack: () => void }) {
+export function GroupDetail({
+  chatId,
+  onBack,
+  initialJournalUserId,
+}: {
+  chatId: string;
+  onBack: () => void;
+  initialJournalUserId?: string;
+}) {
   const [loading, setLoading] = useState(true);
   const [group, setGroup] = useState<Group | null>(null);
   const [blocks, setBlocks] = useState<ScenarioBlock[]>([]);
   const [chatUsername, setChatUsername] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("scenario");
+  const [tab, setTab] = useState<Tab>(initialJournalUserId ? "journal" : "scenario");
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
@@ -153,7 +161,9 @@ export function GroupDetail({ chatId, onBack }: { chatId: string; onBack: () => 
         <SettingsForm group={group} setGroup={setGroup} setPolicy={setPolicy} onSave={saveSettings} saving={saving} />
       ) : null}
 
-      {tab === "journal" ? <JournalList chatId={chatId} decisionLabel={decisionLabel} /> : null}
+      {tab === "journal" ? (
+        <JournalList chatId={chatId} decisionLabel={decisionLabel} highlightUserId={initialJournalUserId} />
+      ) : null}
     </div>
   );
 }
@@ -237,7 +247,7 @@ function SettingsForm({
       <input
         className="field"
         inputMode="numeric"
-        placeholder="секунды, 0 — выкл"
+        placeholder="секунды, 0 = выкл"
         value={String(group.cooldownSeconds ?? 0)}
         onChange={(e) =>
           setGroup({ ...group, cooldownSeconds: Math.max(0, Number(e.target.value) || 0) })
@@ -254,15 +264,24 @@ function SettingsForm({
 function JournalList({
   chatId,
   decisionLabel,
+  highlightUserId,
 }: {
   chatId: string;
   decisionLabel: Record<string, string>;
+  highlightUserId?: string;
 }) {
   const [entries, setEntries] = useState<JournalEntry[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => {
-    api.get<{ entries: JournalEntry[] }>(`/api/owner/groups/${chatId}/journal`).then((d) => setEntries(d.entries));
-  }, [chatId]);
+    api.get<{ entries: JournalEntry[] }>(`/api/owner/groups/${chatId}/journal`).then((d) => {
+      setEntries(d.entries);
+      if (highlightUserId) {
+        // Auto-expand this person's most recent record (entries are newest-first).
+        const match = d.entries.find((e) => e.applicantUserId === highlightUserId);
+        if (match) setOpen(match.id);
+      }
+    });
+  }, [chatId, highlightUserId]);
 
   if (!entries) return <Loading />;
   if (entries.length === 0)
@@ -277,8 +296,9 @@ function JournalList({
       {entries.map((e) => {
         const name = e.applicantUsername ? `@${e.applicantUsername}` : e.applicantName ?? e.applicantUserId;
         const expanded = open === e.id;
+        const highlighted = highlightUserId != null && e.applicantUserId === highlightUserId;
         return (
-          <Card key={e.id}>
+          <Card key={e.id} className={highlighted ? "highlight" : undefined}>
             <button
               className="journal-head"
               onClick={() => setOpen(expanded ? null : e.id)}

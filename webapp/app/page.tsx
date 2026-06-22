@@ -14,6 +14,7 @@ export default function Page() {
   const [inTelegram, setInTelegram] = useState(true);
   const [mode, setMode] = useState<Mode>("owner");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [ownerNav, setOwnerNav] = useState<{ chatId: string; journalUserId?: string } | null>(null);
 
   useEffect(() => {
     const wa = getWebApp();
@@ -52,6 +53,10 @@ export default function Page() {
       setSessionId(session || null);
     } else {
       setMode("owner");
+      const group = params.get("group");
+      if (group) {
+        setOwnerNav({ chatId: group, journalUserId: params.get("journal") || undefined });
+      }
     }
     setReady(true);
   }, []);
@@ -67,5 +72,5 @@ export default function Page() {
     );
   }
   if (mode === "screening") return <Screening sessionId={sessionId} />;
-  return <OwnerApp />;
+  return <OwnerApp initialNav={ownerNav} />;
 }

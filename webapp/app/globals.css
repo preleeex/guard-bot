@@ -45,6 +45,10 @@ body {
   gap: 12px;
 }
 
+.card.highlight {
+  box-shadow: inset 0 0 0 1.5px var(--tg-link);
+}
+
 .title {
   font-size: 18px;
   font-weight: 600;
