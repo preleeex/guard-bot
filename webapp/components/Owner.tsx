@@ -8,6 +8,7 @@ import { t, setLang, initLang, getLang, type Lang } from "@/lib/i18n";
 import { GIF } from "@/lib/assets";
 import type { Group, QuotaStatus } from "@/lib/types";
 import { Avatar, Button, Card, ErrorState, Loading, Message, SectionHeader, StateGif } from "./ui";
+import { BannedScreen } from "./BannedScreen";
 import { UsersIcon, PlusIcon, CoinIcon, StarIcon, ShieldIcon, GroupAddIcon, HelpIcon } from "./icons";
 import { GroupDetail } from "./GroupDetail";
 import { AdminPanel } from "./Admin";
@@ -102,7 +103,7 @@ export function OwnerApp({
     };
   }, [load]);
 
-  if (banned) return <Message title={t("banned_title")} text={t("banned_text")} gif={GIF.ban} />;
+  if (banned) return <BannedScreen />;
   if (loading && !data) return <Loading />;
   if (error && !data)
     return (

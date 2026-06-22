@@ -8,6 +8,7 @@ import { t } from "@/lib/i18n";
 import { GIF } from "@/lib/assets";
 import type { ScenarioBlock } from "@/lib/types";
 import { Button, Card, Loading, Message } from "./ui";
+import { BannedScreen } from "./BannedScreen";
 import { BlockForm, isBlockAnswered, type Payload } from "./BlockForm";
 
 interface Subscription {
@@ -138,8 +139,7 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
   );
 
   if (state === "loading") return <Loading text={t("loading")} />;
-  if (state === "banned")
-    return <Message title={t("banned_title")} text={t("banned_text")} gif={GIF.ban} />;
+  if (state === "banned") return <BannedScreen />;
   if (state === "error") return <Message title={t("unavailable_title")} text={error} gif={GIF.empty} />;
   if (state === "done")
     return (

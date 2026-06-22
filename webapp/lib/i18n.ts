@@ -77,9 +77,37 @@ const dict = {
   // --- reason / banned screens ---
   banned_title: { ru: "Вы заблокированы", en: "You are blocked" },
   banned_text: {
-    ru: "Доступ к боту ограничен. Если это ошибка, обратитесь к администратору.",
-    en: "Your access to the bot is restricted. If this is a mistake, contact the administrator.",
+    ru: "Доступ к боту ограничен. Если это ошибка, подайте апелляцию.",
+    en: "Your access to the bot is restricted. If this is a mistake, submit an appeal.",
   },
+  appeal_open: { ru: "Подать апелляцию", en: "Submit appeal" },
+  appeal_form_title: { ru: "Апелляция", en: "Appeal" },
+  appeal_form_hint: {
+    ru: "Опишите ситуацию и при необходимости приложите скриншот.",
+    en: "Describe what happened and attach a screenshot if needed.",
+  },
+  appeal_text_ph: {
+    ru: "Почему доступ должен быть восстановлен?",
+    en: "Why should your access be restored?",
+  },
+  appeal_add_photo: { ru: "Добавить фото", en: "Add photo" },
+  appeal_remove_photo: { ru: "Убрать фото", en: "Remove photo" },
+  appeal_submit: { ru: "Отправить", en: "Send" },
+  appeal_pending: {
+    ru: "Апелляция на рассмотрении. Ожидайте решения.",
+    en: "Your appeal is under review. Please wait for a decision.",
+  },
+  appeal_rejected: {
+    ru: "Апелляция отклонена. Повторно подать нельзя.",
+    en: "Your appeal was rejected. You cannot submit another one.",
+  },
+  appeal_approved: {
+    ru: "Апелляция одобрена. Перезапустите Mini App.",
+    en: "Your appeal was approved. Restart the Mini App.",
+  },
+  appeal_ban_reason: { ru: "Причина бана", en: "Ban reason" },
+  appeal_load_failed: { ru: "Не удалось загрузить статус.", en: "Could not load status." },
+  appeal_submit_failed: { ru: "Не удалось отправить.", en: "Could not submit." },
   reason_emoji_title: { ru: "Нужен эмодзи-статус", en: "Emoji status required" },
   reason_emoji_text: {
     ru: "Для вступления установите нужный эмодзи-статус в профиле Telegram и подайте заявку снова.",

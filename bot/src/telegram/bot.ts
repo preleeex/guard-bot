@@ -501,6 +501,38 @@ bot.callbackQuery(/^voice:(approve|decline):(.+)$/, async (ctx) => {
   });
 });
 
+// Operator decides on a ban appeal from the inline buttons in DM.
+bot.callbackQuery(/^appeal:(approve|reject):(.+)$/, async (ctx) => {
+  if (!ctx.from || !isBotOwner(ctx.from.id)) {
+    await ctx.answerCallbackQuery({ text: "Нет доступа" });
+    return;
+  }
+  const action = ctx.match[1];
+  const appealId = ctx.match[2];
+
+  const { resolveAppeal } = await import("../services/appeals");
+  try {
+    const result = await resolveAppeal(appealId, action === "approve" ? "approve" : "reject", BigInt(ctx.from.id));
+    const mark = action === "approve" ? "Одобрено" : "Отклонено";
+    await ctx.answerCallbackQuery({ text: result.already ? "Уже обработано" : mark });
+    const msg = ctx.callbackQuery.message as { text?: string; caption?: string } | undefined;
+    const orig = msg?.caption ?? msg?.text ?? "";
+    const suffix = `\n\nРешение: ${mark}`;
+    if (msg?.caption != null) {
+      await ctx.editMessageCaption({ caption: `${orig}${suffix}`.trim() }).catch(() => undefined);
+    } else if (msg?.text != null) {
+      await tryCallApi("editMessageText", {
+        chat_id: ctx.chat?.id,
+        message_id: msg && "message_id" in msg ? (msg as { message_id: number }).message_id : undefined,
+        text: `${orig}${suffix}`.trim(),
+      });
+    }
+  } catch (err) {
+    logger.error("appeal callback failed", { appealId, err: String(err) });
+    await ctx.answerCallbackQuery({ text: "Ошибка" });
+  }
+});
+
 // Track the bot's own membership: removal, and auto-connect on add.
 bot.on("my_chat_member", async (ctx) => {
   const upd = ctx.myChatMember;

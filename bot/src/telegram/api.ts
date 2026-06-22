@@ -141,6 +141,43 @@ export async function sendMessage(
   });
 }
 
+// Upload a photo from a buffer (used for ban appeals with inline review buttons).
+export async function sendPhotoBuffer(
+  chatId: number | bigint,
+  buffer: Buffer,
+  filename: string,
+  caption?: string,
+  replyMarkup?: unknown
+): Promise<unknown> {
+  const form = new FormData();
+  form.append("chat_id", String(Number(chatId)));
+  if (caption) form.append("caption", caption);
+  if (replyMarkup) form.append("reply_markup", JSON.stringify(replyMarkup));
+  form.append("photo", new Blob([buffer], { type: "image/jpeg" }), filename);
+
+  const res = await fetch(`${API_ROOT}/sendPhoto`, { method: "POST", body: form });
+  const data = (await res.json()) as TelegramResponse<unknown>;
+  if (!data.ok) {
+    throw new TelegramApiError("sendPhoto", data.error_code, data.description);
+  }
+  return data.result;
+}
+
+export async function trySendPhotoBuffer(
+  chatId: number | bigint,
+  buffer: Buffer,
+  filename: string,
+  caption?: string,
+  replyMarkup?: unknown
+): Promise<unknown | null> {
+  try {
+    return await sendPhotoBuffer(chatId, buffer, filename, caption, replyMarkup);
+  } catch (err) {
+    logger.warn("telegram sendPhoto failed", { err: String(err) });
+    return null;
+  }
+}
+
 // Re-send a voice message by its file_id (used to forward an applicant's voice
 // note to the group owner for manual review).
 export async function sendVoice(

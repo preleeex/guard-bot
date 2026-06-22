@@ -8,6 +8,7 @@ import { bot } from "../telegram/bot";
 import { ownerRouter } from "./routes/owner";
 import { screeningRouter } from "./routes/screening";
 import { adminRouter } from "./routes/admin";
+import { appealsRouter } from "./routes/appeals";
 import { paymentsRouter, cryptoWebhookRouter } from "./routes/payments";
 
 // Allow the Mini App origin to call the API and send the initData header.
@@ -74,6 +75,7 @@ export function buildApp() {
   app.use("/api/owner", ownerRouter);
   app.use("/api/screening", screeningRouter);
   app.use("/api/admin", adminRouter);
+  app.use("/api/appeals", appealsRouter);
   app.use("/api/payments", paymentsRouter);
 
   // Crypto Pay webhook.

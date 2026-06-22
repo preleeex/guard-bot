@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { getInitData } from "@/lib/telegram";
 import { Button, Card } from "./ui";
 import { StarIcon } from "./icons";
 
@@ -21,6 +22,44 @@ interface Banned {
   createdAt: string;
 }
 
+interface Appeal {
+  id: string;
+  userId: string;
+  username: string | null;
+  name: string | null;
+  text: string;
+  hasPhoto: boolean;
+  createdAt: string;
+}
+
+function AppealPhoto({ appealId }: { appealId: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+    let objectUrl: string | null = null;
+    fetch(`${base}/api/admin/appeals/${appealId}/photo`, {
+      headers: { "X-Telegram-Init-Data": getInitData() },
+    })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        if (!blob) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch(() => undefined);
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [appealId]);
+  if (!src) return null;
+  return (
+    <div className="appeal-photo-wrap">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" className="appeal-photo-preview" />
+    </div>
+  );
+}
+
 // Operator-only admin content, rendered inside the bottom-nav "Админ" tab.
 export function AdminPanel() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -32,13 +71,18 @@ export function AdminPanel() {
   const [banReason, setBanReason] = useState("");
   const [banStatus, setBanStatus] = useState("");
   const [banned, setBanned] = useState<Banned[]>([]);
+  const [appeals, setAppeals] = useState<Appeal[]>([]);
+  const [appealStatus, setAppealStatus] = useState("");
 
   const load = () => api.get<Stats>("/api/admin/stats").then(setStats);
   const loadBanned = () =>
     api.get<{ banned: Banned[] }>("/api/admin/banned").then((r) => setBanned(r.banned));
+  const loadAppeals = () =>
+    api.get<{ appeals: Appeal[] }>("/api/admin/appeals").then((r) => setAppeals(r.appeals));
   useEffect(() => {
     load();
     loadBanned();
+    loadAppeals();
   }, []);
 
   const grant = async () => {
@@ -77,6 +121,18 @@ export function AdminPanel() {
       loadBanned();
     } catch (e) {
       setBanStatus((e as ApiError).message || "Ошибка.");
+    }
+  };
+
+  const resolveAppeal = async (id: string, action: "approve" | "reject") => {
+    setAppealStatus("");
+    try {
+      await api.post(`/api/admin/appeals/${id}/${action}`);
+      setAppealStatus(action === "approve" ? "Апелляция одобрена." : "Апелляция отклонена.");
+      loadAppeals();
+      loadBanned();
+    } catch (e) {
+      setAppealStatus((e as ApiError).message || "Ошибка.");
     }
   };
 
@@ -172,6 +228,34 @@ export function AdminPanel() {
           Забанить
         </Button>
         {banStatus ? <p className="hint center">{banStatus}</p> : null}
+      </Card>
+
+      <Card>
+        <p className="subtitle center">Апелляции</p>
+        {appealStatus ? <p className="hint center">{appealStatus}</p> : null}
+        {appeals.length === 0 ? (
+          <p className="hint center">Нет ожидающих апелляций</p>
+        ) : (
+          appeals.map((a) => {
+            const who = a.username ? `@${a.username}` : a.name ?? a.userId;
+            return (
+              <Card key={a.id}>
+                <p className="subtitle">{who}</p>
+                <p className="hint">id: {a.userId}</p>
+                <p className="hint">{a.text}</p>
+                {a.hasPhoto ? <AppealPhoto appealId={a.id} /> : null}
+                <div className="row">
+                  <Button small onClick={() => resolveAppeal(a.id, "approve")}>
+                    Одобрить
+                  </Button>
+                  <Button small variant="danger" onClick={() => resolveAppeal(a.id, "reject")}>
+                    Отклонить
+                  </Button>
+                </div>
+              </Card>
+            );
+          })
+        )}
       </Card>
 
       <Card>

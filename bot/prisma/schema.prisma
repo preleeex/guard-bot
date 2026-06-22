@@ -192,5 +192,24 @@ model GroupBan {
   @@map("group_bans")
 }
 
+// Ban appeal submitted by a globally banned user (photo + text). The operator
+// reviews it in the admin panel and via DM; approve unbans, reject is final.
+model Appeal {
+  id         String    @id @default(cuid())
+  userId     BigInt
+  username   String?
+  name       String?
+  text       String
+  photoData  String? // JPEG data URL from the Mini App
+  status     String    @default("pending") // "pending" | "approved" | "rejected"
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  resolvedBy BigInt?
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("appeals")
+}
+
 // System-wide counters that are cheap to read for the admin view are derived by
 // aggregation queries, so no extra table is needed here.
