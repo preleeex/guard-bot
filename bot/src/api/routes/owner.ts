@@ -105,7 +105,8 @@ ownerRouter.get("/groups/:chatId", async (req, res) => {
     const chatId = parseChatId(req.params.chatId);
     const group = await assertOwnerOf(chatId, req.tgUser!.id);
     const scenario = await getScenario(chatId);
-    res.json({ group, scenario });
+    const info = await getChat(Number(chatId)).catch(() => null);
+    res.json({ group, scenario, chatUsername: info?.username ?? null });
   } catch (err) {
     handleGroupError(err, res);
   }

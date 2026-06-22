@@ -11,7 +11,7 @@ import type {
   ScenarioBlock,
 } from "@/lib/types";
 import { Button, IconButton } from "./ui";
-import { ArrowUpIcon, ArrowDownIcon, TrashIcon, ShieldIcon, QuizIcon, JournalIcon } from "./icons";
+import { ArrowUpIcon, ArrowDownIcon, TrashIcon, ShieldIcon, QuizIcon, JournalIcon, UploadIcon } from "./icons";
 import { pickImage } from "@/lib/image";
 
 function blockIcon(type: string) {
@@ -40,7 +40,7 @@ function newBlock(type: string): ScenarioBlock {
     return {
       id: uid(),
       type,
-      config: { passScore: 100, questions: [] } as QuizConfig,
+      config: { passCount: 1, questions: [] } as QuizConfig,
     };
   }
   if (type === "media") {
@@ -184,13 +184,16 @@ function QuizEditor({
 
   return (
     <div className="col">
-      <label className="hint">Проходной балл, %</label>
+      <label className="hint">Сколько верных нужно (из {questions.length})</label>
       <input
         className="field"
         inputMode="numeric"
-        value={String(config.passScore ?? 100)}
+        value={String(config.passCount ?? questions.length)}
         onChange={(e) =>
-          onChange({ ...config, passScore: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })
+          onChange({
+            ...config,
+            passCount: Math.max(1, Math.min(Math.max(1, questions.length), Number(e.target.value) || 1)),
+          })
         }
       />
       {questions.map((q, qi) => (
@@ -205,21 +208,20 @@ function QuizEditor({
             <div className="row">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img className="thumb" src={q.image} alt="" />
-              <Button small variant="danger" onClick={() => updateQ(qi, { image: undefined })}>
-                Убрать фото
-              </Button>
+              <IconButton variant="danger" onClick={() => updateQ(qi, { image: undefined })} aria-label="Убрать фото">
+                <TrashIcon size={18} />
+              </IconButton>
             </div>
           ) : (
-            <Button
-              small
-              variant="secondary"
+            <IconButton
+              aria-label="Фото вопроса"
               onClick={async () => {
                 const url = await pickImage();
                 if (url) updateQ(qi, { image: url });
               }}
             >
-              Фото вопроса
-            </Button>
+              <UploadIcon size={18} />
+            </IconButton>
           )}
           {q.options.map((opt, oi) => {
             const correct = q.correct ?? [];
@@ -238,6 +240,15 @@ function QuizEditor({
                       })
                     }
                   />
+                  <IconButton
+                    aria-label="Фото варианта"
+                    onClick={async () => {
+                      const url = await pickImage();
+                      if (url) setOptImage(qi, oi, url);
+                    }}
+                  >
+                    <UploadIcon size={18} />
+                  </IconButton>
                   <Button
                     small
                     variant={isCorrect ? "primary" : "secondary"}
@@ -254,22 +265,11 @@ function QuizEditor({
                   <div className="row">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img className="thumb" src={optImg} alt="" />
-                    <Button small variant="danger" onClick={() => setOptImage(qi, oi, null)}>
-                      Убрать
-                    </Button>
+                    <IconButton variant="danger" onClick={() => setOptImage(qi, oi, null)} aria-label="Убрать">
+                      <TrashIcon size={18} />
+                    </IconButton>
                   </div>
-                ) : (
-                  <Button
-                    small
-                    variant="secondary"
-                    onClick={async () => {
-                      const url = await pickImage();
-                      if (url) setOptImage(qi, oi, url);
-                    }}
-                  >
-                    Фото варианта
-                  </Button>
-                )}
+                ) : null}
               </div>
             );
           })}

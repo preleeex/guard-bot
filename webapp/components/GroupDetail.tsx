@@ -4,14 +4,10 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { openExternal } from "@/lib/telegram";
 import type { Group, JournalEntry, ResultPolicy, ScenarioBlock } from "@/lib/types";
-import { Button, Card, Loading } from "./ui";
+import { Button, Card, Loading, Toggle } from "./ui";
 import { ExternalIcon } from "./icons";
 import { ScenarioBuilder } from "./ScenarioBuilder";
 import { Preview } from "./Preview";
-
-function groupLink(chatId: string): string {
-  return chatId.startsWith("-100") ? `https://t.me/c/${chatId.slice(4)}` : "";
-}
 
 type Tab = "scenario" | "settings" | "journal";
 
@@ -26,6 +22,7 @@ export function GroupDetail({ chatId, onBack }: { chatId: string; onBack: () => 
   const [loading, setLoading] = useState(true);
   const [group, setGroup] = useState<Group | null>(null);
   const [blocks, setBlocks] = useState<ScenarioBlock[]>([]);
+  const [chatUsername, setChatUsername] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("scenario");
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -33,10 +30,13 @@ export function GroupDetail({ chatId, onBack }: { chatId: string; onBack: () => 
 
   useEffect(() => {
     api
-      .get<{ group: Group; scenario: ScenarioBlock[] }>(`/api/owner/groups/${chatId}`)
+      .get<{ group: Group; scenario: ScenarioBlock[]; chatUsername: string | null }>(
+        `/api/owner/groups/${chatId}`
+      )
       .then((data) => {
         setGroup(data.group);
         setBlocks(data.scenario);
+        setChatUsername(data.chatUsername);
       })
       .finally(() => setLoading(false));
   }, [chatId]);
@@ -99,8 +99,8 @@ export function GroupDetail({ chatId, onBack }: { chatId: string; onBack: () => 
         <p className="subtitle">{group.title ?? group.chatId}</p>
       </div>
 
-      {groupLink(chatId) ? (
-        <Button variant="secondary" onClick={() => openExternal(groupLink(chatId))}>
+      {chatUsername ? (
+        <Button variant="secondary" onClick={() => openExternal(`https://t.me/${chatUsername}`)}>
           <span className="btn-icon">
             <ExternalIcon size={18} /> Перейти в группу
           </span>
@@ -109,21 +109,14 @@ export function GroupDetail({ chatId, onBack }: { chatId: string; onBack: () => 
 
       <Card>
         <div className="row">
-          <div>
-            <p className="subtitle">Guard mode</p>
-            <p className="hint">{group.guardEnabled ? "Включён" : "Выключен"}</p>
-          </div>
-          <Button
-            small
-            variant={group.guardEnabled ? "danger" : "primary"}
-            onClick={async () => {
-              const next = !group.guardEnabled;
+          <p className="subtitle">Guard mode</p>
+          <Toggle
+            checked={group.guardEnabled}
+            onChange={async (next) => {
               setGroup({ ...group, guardEnabled: next });
               await api.patch(`/api/owner/groups/${chatId}`, { guardEnabled: next });
             }}
-          >
-            {group.guardEnabled ? "Выключить" : "Включить"}
-          </Button>
+          />
         </div>
       </Card>
 
@@ -219,30 +212,29 @@ function SettingsForm({
       ) : null}
 
       <div className="divider" />
-      <p className="subtitle">Таймаут</p>
-      <label className="hint">Время на прохождение, секунд</label>
+      <p className="subtitle">Время на прохождение</p>
       <input
         className="field"
         inputMode="numeric"
+        placeholder="секунды"
         value={String(group.timeoutSeconds)}
         onChange={(e) => setGroup({ ...group, timeoutSeconds: Math.max(30, Number(e.target.value) || 600) })}
       />
-      <label className="hint">Действие по таймауту</label>
       <select
         className="field"
         value={group.timeoutAction}
         onChange={(e) => setGroup({ ...group, timeoutAction: e.target.value as "queue" | "decline" })}
       >
-        <option value="queue">Ручная проверка</option>
-        <option value="decline">Отклонить</option>
+        <option value="queue">По таймауту: ручная проверка</option>
+        <option value="decline">По таймауту: отклонить</option>
       </select>
 
       <div className="divider" />
       <p className="subtitle">Кулдаун после отказа</p>
-      <label className="hint">Секунд, 0 — выключено. Повторные заявки в это окно авто-отклоняются.</label>
       <input
         className="field"
         inputMode="numeric"
+        placeholder="секунды, 0 — выкл"
         value={String(group.cooldownSeconds ?? 0)}
         onChange={(e) =>
           setGroup({ ...group, cooldownSeconds: Math.max(0, Number(e.target.value) || 0) })
@@ -250,7 +242,7 @@ function SettingsForm({
       />
 
       <Button disabled={saving} onClick={onSave}>
-        Сохранить настройки
+        Сохранить
       </Button>
     </Card>
   );

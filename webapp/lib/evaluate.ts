@@ -42,11 +42,13 @@ export function buildPreview(draft: ScenarioBlock[]): {
       return {
         ...block,
         config: {
-          passScore: cfg.passScore,
+          passCount: cfg.passCount,
           questions: (cfg.questions ?? []).map((q) => ({
             id: q.id,
             text: q.text,
+            image: q.image,
             options: q.options,
+            optionImages: q.optionImages,
           })),
         },
       };
@@ -88,7 +90,8 @@ export function evaluatePreview(
       }
       const score = questions.length === 0 ? 100 : Math.round((correct / questions.length) * 100);
       quizScores.push(score);
-      if (score < (cfg.passScore ?? 0)) mandatoryFailed = true;
+      const need = cfg.passCount ?? questions.length;
+      if (correct < need) mandatoryFailed = true;
     } else if (block.type === "rules") {
       if (payload.agreed !== true) mandatoryFailed = true;
     }

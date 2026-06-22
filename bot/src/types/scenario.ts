@@ -28,8 +28,8 @@ export interface QuizQuestion {
 
 export interface QuizConfig {
   questions: QuizQuestion[];
-  // minimum percentage of correct answers to pass this block (0..100)
-  passScore: number;
+  // minimum number of correct answers required to pass this block
+  passCount: number;
 }
 
 // --- rules -----------------------------------------------------------------

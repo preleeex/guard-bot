@@ -21,7 +21,7 @@ export interface QuizQuestion {
 
 export interface QuizConfig {
   questions: QuizQuestion[];
-  passScore: number;
+  passCount: number; // number of correct answers required
 }
 
 export interface RulesConfig {

@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db";
-import { getChatMember } from "../telegram/api";
+import { getChatMember, tryCallApi } from "../telegram/api";
 import { canAddGroup } from "./quota";
 import { sendSystemLog } from "../telegram/systemLog";
 
@@ -78,6 +78,12 @@ export async function connectGroup(params: {
     title,
     chatId,
     ownerUserId: requesterUserId,
+  });
+
+  // Notify the owner in their DM too (best effort).
+  await tryCallApi("sendMessage", {
+    chat_id: Number(requesterUserId),
+    text: `Новая группа подключена: ${title ?? chatId}`,
   });
 
   return { created: true, reactivated: false };

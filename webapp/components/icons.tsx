@@ -137,6 +137,15 @@ export function HelpIcon({ size = 20, ...rest }: IconProps) {
   );
 }
 
+export function UploadIcon({ size = 20, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, rest)}>
+      <path d="M12 16V5M8 9l4-4 4 4" />
+      <path d="M5 19h14" />
+    </svg>
+  );
+}
+
 export function ExternalIcon({ size = 20, ...rest }: IconProps) {
   return (
     <svg {...base(size, rest)}>

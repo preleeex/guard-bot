@@ -123,7 +123,7 @@ export function BlockForm({
     return (
       <div className="col">
         <p className="subtitle">Правила</p>
-        <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{cfg.text}</p>
+        <p className="rules-text">{cfg.text}</p>
         <button
           className={`option ${agreed ? "selected" : ""}`}
           onClick={() => onChange({ agreed: true })}

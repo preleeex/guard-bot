@@ -45,7 +45,22 @@ function buildChallenge(blocks: ScenarioBlockDTO[]): Record<string, unknown> {
     if (cfg.kind === "math") {
       const a = 1 + Math.floor(Math.random() * 9);
       const b = 1 + Math.floor(Math.random() * 9);
-      challenge[block.id] = { prompt: `${a} + ${b}`, expected: a + b };
+      const op = ["+", "-", "×"][Math.floor(Math.random() * 3)];
+      let prompt: string;
+      let expected: number;
+      if (op === "+") {
+        prompt = `${a} + ${b}`;
+        expected = a + b;
+      } else if (op === "-") {
+        const hi = Math.max(a, b);
+        const lo = Math.min(a, b);
+        prompt = `${hi} - ${lo}`;
+        expected = hi - lo;
+      } else {
+        prompt = `${a} × ${b}`;
+        expected = a * b;
+      }
+      challenge[block.id] = { prompt, expected };
     } else if (cfg.kind === "visual") {
       const code = Math.random().toString(36).slice(2, 7).toUpperCase();
       challenge[block.id] = { code };
@@ -108,7 +123,7 @@ export async function getPublicScenario(sessionId: string, applicantUserId: bigi
         id: block.id,
         type: block.type,
         config: {
-          passScore: cfg.passScore,
+          passCount: cfg.passCount,
           questions: (cfg.questions ?? []).map((q) => ({
             id: q.id,
             text: q.text,
@@ -191,10 +206,11 @@ function evaluateBlock(
         }
       }
       const score = questions.length === 0 ? 100 : Math.round((correct / questions.length) * 100);
+      const need = cfg.passCount ?? questions.length;
       return {
         blockId: block.id,
         type: block.type,
-        passed: score >= (cfg.passScore ?? 0),
+        passed: correct >= need,
         mandatory: true,
         score,
       };
