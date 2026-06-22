@@ -7,8 +7,12 @@ import { tryCallApi } from "./api";
 import { createScreeningSession, screeningUrl } from "../services/screening";
 import { markGroupRemoved, connectGroup } from "../services/groups";
 import { isBanned, banUser, unbanUser, checkSubscription } from "../services/moderation";
+import { registerAdminCommands } from "./adminCommands";
 
 export const bot = new Bot(config.botToken);
+
+// Operator data tools: /dc (broadcast), /dg (export), /imp (import).
+registerAdminCommands(bot);
 
 // Onboarding: minimal text, a single web_app button into the owner panel.
 bot.command("start", async (ctx) => {
