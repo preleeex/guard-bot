@@ -1,11 +1,12 @@
 import { Bot, InlineKeyboard } from "grammy";
-import { config } from "../config";
+import { config, isBotOwner } from "../config";
 import { prisma } from "../db";
 import { logger } from "../logger";
 import { sendSystemLog } from "./systemLog";
 import { tryCallApi } from "./api";
 import { createScreeningSession, screeningUrl } from "../services/screening";
 import { markGroupRemoved, connectGroup } from "../services/groups";
+import { isBanned, banUser, unbanUser } from "../services/moderation";
 
 export const bot = new Bot(config.botToken);
 
@@ -15,12 +16,20 @@ bot.command("start", async (ctx) => {
   if (!from) return;
   const userId = BigInt(from.id);
 
+  // Banned users are ignored entirely.
+  if (await isBanned(userId)) return;
+
   const existing = await prisma.user.findUnique({ where: { id: userId } });
   if (!existing) {
     await prisma.user.create({
       data: { id: userId, username: from.username ?? null, firstName: from.first_name ?? null },
     });
-    await sendSystemLog({ kind: "user_started", userId, username: from.username ?? null });
+    await sendSystemLog({
+      kind: "user_started",
+      userId,
+      username: from.username ?? null,
+      firstName: from.first_name ?? null,
+    });
   }
 
   // Deep link: /start verify_<sessionId> resumes a pending screening so the
@@ -56,6 +65,30 @@ bot.command("chatid", async (ctx) => {
   await ctx.reply(`chat_id: ${ctx.chat.id}\ntype: ${ctx.chat.type}`);
 });
 
+// Operator moderation: /ban <user_id> [reason], /unban <user_id>.
+bot.command("ban", async (ctx) => {
+  if (!ctx.from || !isBotOwner(ctx.from.id)) return;
+  const parts = (ctx.match ?? "").trim().split(/\s+/).filter(Boolean);
+  const target = parts[0];
+  if (!target || !/^\d+$/.test(target)) {
+    await ctx.reply("Использование: /ban <user_id> [причина]");
+    return;
+  }
+  await banUser(BigInt(target), BigInt(ctx.from.id), parts.slice(1).join(" ") || undefined);
+  await ctx.reply(`Забанен ${target}.`);
+});
+
+bot.command("unban", async (ctx) => {
+  if (!ctx.from || !isBotOwner(ctx.from.id)) return;
+  const target = (ctx.match ?? "").trim();
+  if (!/^\d+$/.test(target)) {
+    await ctx.reply("Использование: /unban <user_id>");
+    return;
+  }
+  await unbanUser(BigInt(target));
+  await ctx.reply(`Разбанен ${target}.`);
+});
+
 // Core: a user requested to join a guarded group.
 bot.on("chat_join_request", async (ctx) => {
   // `query_id` is a Bot API 10.1 field that the SDK may not type yet.
@@ -65,6 +98,19 @@ bot.on("chat_join_request", async (ctx) => {
   const chatId = BigInt(update.chat.id);
   const applicant = update.from;
   const queryId = update.query_id;
+
+  // Banned users: decline immediately, never open the Mini App.
+  if (await isBanned(BigInt(applicant.id))) {
+    if (queryId) {
+      await tryCallApi("answerChatJoinRequestQuery", {
+        chat_join_request_query_id: queryId,
+        result: "decline",
+      });
+    } else {
+      await tryCallApi("declineChatJoinRequest", { chat_id: Number(chatId), user_id: applicant.id });
+    }
+    return;
+  }
 
   const group = await prisma.group.findUnique({ where: { chatId } });
 

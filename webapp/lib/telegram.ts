@@ -38,6 +38,9 @@ export interface TelegramWebApp {
   onEvent: (event: string, cb: () => void) => void;
   openLink: (url: string) => void;
   openTelegramLink: (url: string) => void;
+  // Bot API 8.0+; may be absent on older clients.
+  requestFullscreen?: () => void;
+  disableVerticalSwipes?: () => void;
 }
 
 declare global {

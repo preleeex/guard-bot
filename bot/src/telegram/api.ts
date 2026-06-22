@@ -60,11 +60,11 @@ export interface ChatMember {
 }
 
 export async function getChatMember(
-  chatId: number | bigint,
+  chatId: number | bigint | string,
   userId: number | bigint
 ): Promise<ChatMember> {
   return callApi<ChatMember>("getChatMember", {
-    chat_id: Number(chatId),
+    chat_id: typeof chatId === "string" ? chatId : Number(chatId),
     user_id: Number(userId),
   });
 }

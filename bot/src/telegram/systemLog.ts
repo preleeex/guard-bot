@@ -7,7 +7,7 @@ import { tryCallApi } from "./api";
 export type SystemEvent =
   | { kind: "group_connected"; title?: string; chatId: bigint; ownerUserId: bigint }
   | { kind: "group_removed"; title?: string; chatId: bigint }
-  | { kind: "user_started"; userId: bigint; username?: string | null }
+  | { kind: "user_started"; userId: bigint; username?: string | null; firstName?: string | null }
   | { kind: "payment"; userId: bigint; amount: string; currency: string; slots: number }
   | { kind: "manual_slots"; targetUserId: bigint; slots: number; byUserId: bigint }
   | { kind: "critical_error"; context: string; detail: string };
@@ -18,8 +18,11 @@ function format(event: SystemEvent): string {
       return `Группа подключена\nНазвание: ${event.title ?? "(без названия)"}\nchat_id: ${event.chatId}\nowner_user_id: ${event.ownerUserId}`;
     case "group_removed":
       return `Бот удалён из группы\nНазвание: ${event.title ?? "(без названия)"}\nchat_id: ${event.chatId}`;
-    case "user_started":
-      return `Новый пользователь\nuser_id: ${event.userId}\nusername: ${event.username ?? "(нет)"}`;
+    case "user_started": {
+      const uname = event.username ? `@${event.username}` : "(нет)";
+      const name = event.firstName ? ` | ${event.firstName}` : "";
+      return `✅ Новый: ${uname} (id: ${event.userId})${name}`;
+    }
     case "payment":
       return `Оплата\nuser_id: ${event.userId}\nсумма: ${event.amount} ${event.currency}\nслотов добавлено: ${event.slots}`;
     case "manual_slots":

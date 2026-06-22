@@ -20,6 +20,13 @@ export default function Page() {
     if (wa) {
       wa.ready();
       wa.expand();
+      // Open the Mini App full-screen where supported.
+      try {
+        wa.requestFullscreen?.();
+        wa.disableVerticalSwipes?.();
+      } catch {
+        // older clients: ignore
+      }
       applyTheme();
       wa.onEvent("themeChanged", applyTheme);
     }

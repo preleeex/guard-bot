@@ -13,6 +13,7 @@ import {
 } from "../telegram/api";
 import { getScenario } from "./scenarios";
 import { addJournalEntry } from "./journal";
+import { isBanned, checkSubscription } from "./moderation";
 import type {
   BlockAnswer,
   CaptchaConfig,
@@ -92,7 +93,11 @@ export async function getPublicScenario(sessionId: string, applicantUserId: bigi
   if (session.expiresAt.getTime() < Date.now()) {
     throw new ScreeningError("expired", "Время на проверку истекло.");
   }
+  if (await isBanned(applicantUserId)) {
+    throw new ScreeningError("banned", "Доступ заблокирован.");
+  }
 
+  const subscription = await checkSubscription(applicantUserId);
   const blocks = await getScenario(session.chatId);
   const challenge = session.challenge as unknown as Record<string, { prompt?: string; code?: string }>;
 
@@ -135,6 +140,7 @@ export async function getPublicScenario(sessionId: string, applicantUserId: bigi
     sessionId: session.id,
     expiresAt: session.expiresAt,
     blocks: publicBlocks,
+    subscription,
   };
 }
 
@@ -305,6 +311,33 @@ export async function submitScreening(
 
   const group = await prisma.group.findUnique({ where: { chatId: session.chatId } });
   if (!group) throw new ScreeningError("not_found", "Группа не найдена.");
+
+  // Banned users are declined regardless of answers.
+  if (await isBanned(applicantUserId)) {
+    await prisma.screeningSession.update({ where: { id: sessionId }, data: { status: "completed" } });
+    try {
+      await applyJoinDecision(session, "decline");
+    } catch (err) {
+      logger.error("failed to decline banned applicant", { sessionId, err: String(err) });
+    }
+    await addJournalEntry({
+      chatId: session.chatId,
+      applicantUserId: session.applicantUserId,
+      applicantUsername: session.applicantUsername,
+      applicantName: session.applicantName,
+      decision: "decline",
+      reason: "Заблокирован.",
+      answers: [],
+      startedAt: session.createdAt,
+    });
+    return { decision: "decline", score: 0, reason: "Заблокирован." };
+  }
+
+  // Mandatory channel subscription must be satisfied before approval.
+  const subscription = await checkSubscription(applicantUserId);
+  if (subscription.required && !subscription.subscribed) {
+    throw new ScreeningError("not_subscribed", "Нужна подписка на канал.");
+  }
 
   const blocks = await getScenario(session.chatId);
   const challenge = session.challenge as unknown as Record<string, { expected?: number; code?: string }>;

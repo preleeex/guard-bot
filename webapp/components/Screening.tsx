@@ -1,17 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import { getWebApp } from "@/lib/telegram";
+import { getWebApp, openExternal } from "@/lib/telegram";
 import { GIF } from "@/lib/assets";
 import type { ScenarioBlock } from "@/lib/types";
 import { Button, Card, Loading, Message } from "./ui";
 import { BlockForm, isBlockAnswered, type Payload } from "./BlockForm";
 
+interface Subscription {
+  required: boolean;
+  subscribed: boolean;
+  username?: string;
+  url?: string;
+}
+
 interface ScenarioResponse {
   sessionId: string;
   expiresAt: string;
   blocks: ScenarioBlock[];
+  subscription?: Subscription;
 }
 
 const decisionText: Record<string, string> = {
@@ -21,31 +29,40 @@ const decisionText: Record<string, string> = {
 };
 
 export function Screening({ sessionId }: { sessionId: string | null }) {
-  const [state, setState] = useState<"loading" | "form" | "done" | "error">("loading");
+  const [state, setState] = useState<"loading" | "gate" | "form" | "done" | "error">("loading");
   const [error, setError] = useState<string>("");
   const [blocks, setBlocks] = useState<ScenarioBlock[]>([]);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, Payload>>({});
   const [result, setResult] = useState<string>("");
   const [decision, setDecision] = useState<string>("");
 
-  useEffect(() => {
+  const loadScenario = useCallback(async () => {
     if (!sessionId) {
       setState("error");
       setError("Сессия не указана.");
       return;
     }
-    api
-      .get<ScenarioResponse>(`/api/screening/${sessionId}`)
-      .then((data) => {
-        setBlocks(data.blocks);
-        setState(data.blocks.length === 0 ? "form" : "form");
-      })
-      .catch((e: ApiError) => {
-        setState("error");
-        setError(e.message || "Не удалось загрузить проверку.");
-      });
+    setState("loading");
+    try {
+      const data = await api.get<ScenarioResponse>(`/api/screening/${sessionId}`);
+      setBlocks(data.blocks);
+      setSubscription(data.subscription ?? null);
+      if (data.subscription?.required && !data.subscription.subscribed) {
+        setState("gate");
+      } else {
+        setState("form");
+      }
+    } catch (e) {
+      setState("error");
+      setError((e as ApiError).message || "Не удалось загрузить проверку.");
+    }
   }, [sessionId]);
+
+  useEffect(() => {
+    loadScenario();
+  }, [loadScenario]);
 
   const current = blocks[step];
   const currentPayload = current ? answers[current.id] ?? {} : {};
@@ -87,6 +104,23 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
         gif={decision === "decline" ? GIF.ban : undefined}
       />
     );
+
+  if (state === "gate") {
+    return (
+      <div className="app">
+        <Card>
+          <p className="title center">Подпишись на канал</p>
+          <p className="hint center">Чтобы вступить, подпишись на канал и нажми «Проверить».</p>
+          <Button onClick={() => subscription?.url && openExternal(subscription.url)}>
+            Открыть канал{subscription?.username ? ` @${subscription.username}` : ""}
+          </Button>
+          <Button variant="secondary" onClick={loadScenario}>
+            Проверить
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   if (blocks.length === 0) {
     // No scenario configured: nothing to do, submit immediately.

@@ -134,5 +134,16 @@ model JournalEntry {
   @@map("journal_entries")
 }
 
+// Globally banned users. A banned user is ignored everywhere: join requests are
+// auto-declined and the screening Mini App never opens for them.
+model BannedUser {
+  userId    BigInt   @id
+  reason    String?
+  bannedBy  BigInt?
+  createdAt DateTime @default(now())
+
+  @@map("banned_users")
+}
+
 // System-wide counters that are cheap to read for the admin view are derived by
 // aggregation queries, so no extra table is needed here.

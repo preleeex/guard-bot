@@ -27,8 +27,17 @@ export const config = {
     token: optional("CRYPTO_PAY_API_TOKEN"),
     base: optional("CRYPTO_PAY_API_BASE", "https://pay.crypt.bot/api").replace(/\/$/, ""),
   },
+  // Mandatory channel subscription gate, e.g. "@zamerz_typing". Empty disables.
+  requiredChannel: optional("REQUIRED_CHANNEL"),
+  // Maintenance mode: when "1"/"true", the Mini App and bot show a notice.
+  maintenance: ["1", "true", "yes"].includes(optional("MAINTENANCE_MODE").toLowerCase()),
   port: parseInt(optional("PORT", "8080"), 10),
 };
+
+export function requiredChannelUrl(): string | undefined {
+  if (!config.requiredChannel) return undefined;
+  return `https://t.me/${config.requiredChannel.replace(/^@/, "")}`;
+}
 
 // Quota and pricing, fixed by the spec.
 export const FREE_GROUP_SLOTS = 3;
