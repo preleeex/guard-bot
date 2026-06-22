@@ -21,7 +21,7 @@ function format(event: SystemEvent): string {
     case "user_started": {
       const uname = event.username ? `@${event.username}` : "(нет)";
       const name = event.firstName ? ` | ${event.firstName}` : "";
-      return `✅ Новый: ${uname} (id: ${event.userId})${name}`;
+      return `Новый: ${uname} (id: ${event.userId})${name}`;
     }
     case "payment":
       return `Оплата\nuser_id: ${event.userId}\nсумма: ${event.amount} ${event.currency}\nслотов добавлено: ${event.slots}`;

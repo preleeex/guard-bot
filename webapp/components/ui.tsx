@@ -1,7 +1,25 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { GIF } from "@/lib/assets";
+
+// A small "?" button that toggles a short explanation bubble.
+export function InfoTip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="info-wrap">
+      <button
+        type="button"
+        className="info-tip"
+        aria-label="Что это"
+        onClick={() => setOpen((v) => !v)}
+      >
+        ?
+      </button>
+      {open ? <span className="info-bubble">{text}</span> : null}
+    </span>
+  );
+}
 
 export function Card({ children }: { children: React.ReactNode }) {
   return <div className="card">{children}</div>;

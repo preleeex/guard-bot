@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { openExternal } from "@/lib/telegram";
 import type { Group, JournalEntry, ResultPolicy, ScenarioBlock } from "@/lib/types";
-import { Button, Card, Loading, Toggle } from "./ui";
+import { Avatar, Button, Card, Loading, Toggle, InfoTip } from "./ui";
 import { ExternalIcon } from "./icons";
 import { ScenarioBuilder } from "./ScenarioBuilder";
 import { Preview } from "./Preview";
@@ -109,7 +109,10 @@ export function GroupDetail({ chatId, onBack }: { chatId: string; onBack: () => 
 
       <Card>
         <div className="row">
-          <p className="subtitle">Guard mode</p>
+          <span className="icon-row">
+            <p className="subtitle">Guard mode</p>
+            <InfoTip text="Включает проверку при вступлении: человек проходит сценарий в Mini App, и только потом его впускают." />
+          </span>
           <Toggle
             checked={group.guardEnabled}
             onChange={async (next) => {
@@ -172,31 +175,25 @@ function SettingsForm({
   const useThreshold = policy.queueThreshold != null;
   return (
     <Card>
-      <p className="subtitle">Результат проверки</p>
-      <label className="option">
-        <input
-          type="checkbox"
-          checked={policy.passApprove}
-          onChange={(e) => setPolicy({ passApprove: e.target.checked })}
-        />
-        Авто-одобрение при успехе
-      </label>
-      <label className="option">
-        <input
-          type="checkbox"
-          checked={policy.failDecline}
-          onChange={(e) => setPolicy({ failDecline: e.target.checked })}
-        />
-        Авто-отклонение при провале
-      </label>
-      <label className="option">
-        <input
-          type="checkbox"
+      <span className="icon-row">
+        <p className="subtitle">Результат проверки</p>
+        <InfoTip text="Что делать с заявкой: авто-одобрить при успехе, авто-отклонить при провале, либо отправить в очередь на ручное решение при пороговом балле." />
+      </span>
+      <div className="row">
+        <span>Авто-одобрение при успехе</span>
+        <Toggle checked={policy.passApprove} onChange={(v) => setPolicy({ passApprove: v })} />
+      </div>
+      <div className="row">
+        <span>Авто-отклонение при провале</span>
+        <Toggle checked={policy.failDecline} onChange={(v) => setPolicy({ failDecline: v })} />
+      </div>
+      <div className="row">
+        <span>Очередь при пороге</span>
+        <Toggle
           checked={useThreshold}
-          onChange={(e) => setPolicy({ queueThreshold: e.target.checked ? 60 : null })}
+          onChange={(v) => setPolicy({ queueThreshold: v ? 60 : null })}
         />
-        Очередь при пороговом результате
-      </label>
+      </div>
       {useThreshold ? (
         <div className="col">
           <label className="hint">Порог, % (ниже порога: ручная проверка)</label>
@@ -212,7 +209,10 @@ function SettingsForm({
       ) : null}
 
       <div className="divider" />
-      <p className="subtitle">Время на прохождение</p>
+      <span className="icon-row">
+        <p className="subtitle">Время на прохождение</p>
+        <InfoTip text="Сколько секунд даётся на прохождение. По истечении применяется действие ниже." />
+      </span>
       <input
         className="field"
         inputMode="numeric"
@@ -230,7 +230,10 @@ function SettingsForm({
       </select>
 
       <div className="divider" />
-      <p className="subtitle">Кулдаун после отказа</p>
+      <span className="icon-row">
+        <p className="subtitle">Кулдаун после отказа</p>
+        <InfoTip text="Сколько секунд после отказа повторные заявки от этого человека авто-отклоняются, чтобы не спамил." />
+      </span>
       <input
         className="field"
         inputMode="numeric"
@@ -256,6 +259,7 @@ function JournalList({
   decisionLabel: Record<string, string>;
 }) {
   const [entries, setEntries] = useState<JournalEntry[] | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   useEffect(() => {
     api.get<{ entries: JournalEntry[] }>(`/api/owner/groups/${chatId}/journal`).then((d) => setEntries(d.entries));
   }, [chatId]);
@@ -264,27 +268,53 @@ function JournalList({
   if (entries.length === 0)
     return (
       <Card>
-        <p className="hint">Журнал пуст.</p>
+        <p className="hint center">Журнал пуст.</p>
       </Card>
     );
 
   return (
     <div className="col">
-      {entries.map((e) => (
-        <Card key={e.id}>
-          <div className="row">
-            <p className="subtitle">
-              {e.applicantUsername ? `@${e.applicantUsername}` : e.applicantName ?? e.applicantUserId}
-            </p>
-            <span className={`pill ${e.decision}`}>{decisionLabel[e.decision] ?? e.decision}</span>
-          </div>
-          <p className="hint">
-            {new Date(e.finishedAt).toLocaleString("ru-RU")}
-            {e.score != null ? ` · балл ${e.score}` : ""}
-          </p>
-          {e.reason ? <p className="hint">{e.reason}</p> : null}
-        </Card>
-      ))}
+      {entries.map((e) => {
+        const name = e.applicantUsername ? `@${e.applicantUsername}` : e.applicantName ?? e.applicantUserId;
+        const expanded = open === e.id;
+        return (
+          <Card key={e.id}>
+            <button
+              className="journal-head"
+              onClick={() => setOpen(expanded ? null : e.id)}
+            >
+              <Avatar name={e.applicantName ?? e.applicantUsername ?? undefined} size={36} />
+              <span className="list-item-title">{name}</span>
+              <span className={`pill ${e.decision}`}>{decisionLabel[e.decision] ?? e.decision}</span>
+            </button>
+            {expanded ? (
+              <div className="col" style={{ gap: 6 }}>
+                <div className="divider" />
+                {e.applicantName ? <p className="hint">Имя: {e.applicantName}</p> : null}
+                {e.applicantUsername ? <p className="hint">Username: @{e.applicantUsername}</p> : null}
+                <p className="hint">ID: {e.applicantUserId}</p>
+                <p className="hint">Когда: {new Date(e.finishedAt).toLocaleString("ru-RU")}</p>
+                {e.score != null ? <p className="hint">Балл: {e.score}</p> : null}
+                {e.reason ? <p className="hint">Причина: {e.reason}</p> : null}
+                {e.applicantUsername ? (
+                  <Button
+                    small
+                    variant="secondary"
+                    onClick={() => openExternal(`https://t.me/${e.applicantUsername}`)}
+                  >
+                    Посмотреть профиль
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <p className="hint">
+                {new Date(e.finishedAt).toLocaleString("ru-RU")}
+                {e.score != null ? ` · балл ${e.score}` : ""}
+              </p>
+            )}
+          </Card>
+        );
+      })}
     </div>
   );
 }

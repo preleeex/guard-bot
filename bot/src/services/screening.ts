@@ -464,12 +464,19 @@ async function notifyOwnerDecision(params: {
   reason: string;
   score?: number | null;
 }): Promise<void> {
-  const mark = params.decision === "approve" ? "✅" : params.decision === "decline" ? "❌" : "⏳";
+  const label =
+    params.decision === "approve"
+      ? "Прошёл"
+      : params.decision === "decline"
+      ? "Не прошёл"
+      : params.decision === "queue"
+      ? "Очередь"
+      : "Таймаут";
   const who = params.applicantUsername
     ? `@${params.applicantUsername}`
     : params.applicantName ?? String(params.applicantUserId);
   const lines = [
-    `${mark} ${who} (id: ${params.applicantUserId})`,
+    `${label}: ${who} (id: ${params.applicantUserId})`,
     params.chatTitle ? `Группа: ${params.chatTitle}` : "",
     params.score != null ? `Балл: ${params.score}` : "",
     params.reason,

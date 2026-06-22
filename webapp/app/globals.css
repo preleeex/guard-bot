@@ -293,6 +293,44 @@ textarea.field {
   margin: 0;
 }
 
+/* Donate-style plan card */
+.plan {
+  appearance: none;
+  border: 1px solid var(--tg-secondary-bg);
+  background: var(--tg-secondary-bg);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--tg-text);
+}
+
+.plan:disabled {
+  opacity: 0.5;
+}
+
+.plan-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.plan-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.plan-price {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--tg-button);
+  white-space: nowrap;
+}
+
 /* Tappable row in a list (e.g. a group) */
 .list-item {
   appearance: none;
@@ -540,6 +578,55 @@ textarea.field {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.journal-head {
+  appearance: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  color: var(--tg-text);
+  text-align: left;
+}
+
+/* Info tip */
+.info-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.info-tip {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: var(--tg-secondary-bg);
+  color: var(--tg-text);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.info-bubble {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  width: 230px;
+  background: var(--tg-bg);
+  border: 1px solid var(--tg-secondary-bg);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--tg-hint);
+  z-index: 30;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
 .opt-img {

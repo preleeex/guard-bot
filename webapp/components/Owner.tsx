@@ -275,27 +275,36 @@ function Home({
       ) : null}
 
       {tab === "billing" ? (
-        <Card>
-          <SectionHeader icon={<CoinIcon />} title="Квота" />
-          <p className="big-number center">
-            {quota.usedGroups}
-            {quota.unlimited ? "" : ` / ${quota.totalSlots}`}
-          </p>
-          {quota.unlimited ? (
-            <p className="center">
-              <span className="pill">Безлимит</span>
+        <>
+          <Card>
+            <SectionHeader icon={<CoinIcon />} title="Квота" />
+            <p className="big-number center">
+              {quota.usedGroups}
+              {quota.unlimited ? "" : ` / ${quota.totalSlots}`}
             </p>
-          ) : (
-            <>
-              <Button disabled={buying} onClick={() => buyPlan("small")}>
-                +5 групп — 2.99$
-              </Button>
-              <Button variant="secondary" disabled={buying} onClick={() => buyPlan("big")}>
-                +15 групп — 6.99$
-              </Button>
-              <Button variant="secondary" disabled={buying} onClick={() => buyPlan("unlimited")}>
-                Безлимит — 14.99$
-              </Button>
+            {quota.unlimited ? (
+              <p className="center">
+                <span className="pill">Безлимит</span>
+              </p>
+            ) : null}
+          </Card>
+
+          {!quota.unlimited ? (
+            <Card>
+              <p className="subtitle center">Поддержать и получить больше</p>
+              {[
+                { key: "small", title: "+5 групп", perk: "Больше групп для проверок", price: "2.99$" },
+                { key: "big", title: "+15 групп", perk: "Выгоднее для актива", price: "6.99$" },
+                { key: "unlimited", title: "Безлимит", perk: "Все группы без лимита", price: "14.99$" },
+              ].map((p) => (
+                <button key={p.key} className="plan" disabled={buying} onClick={() => buyPlan(p.key)}>
+                  <span className="plan-info">
+                    <span className="plan-title">{p.title}</span>
+                    <span className="hint">{p.perk}</span>
+                  </span>
+                  <span className="plan-price">{p.price}</span>
+                </button>
+              ))}
               {awaiting ? (
                 <Button variant="secondary" disabled={checking} onClick={checkPayment}>
                   Проверить оплату
@@ -306,9 +315,9 @@ function Home({
                   {error}
                 </p>
               ) : null}
-            </>
-          )}
-        </Card>
+            </Card>
+          ) : null}
+        </>
       ) : null}
 
       {tab === "admin" && isOperator ? <AdminPanel /> : null}
