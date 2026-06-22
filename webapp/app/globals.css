@@ -398,6 +398,30 @@ textarea.field {
   gap: 8px;
 }
 
+.thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--tg-secondary-bg);
+}
+
+.q-img {
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: var(--tg-secondary-bg);
+}
+
+.opt-img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+
 .media-img,
 .media-video {
   width: 100%;

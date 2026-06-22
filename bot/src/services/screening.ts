@@ -112,7 +112,9 @@ export async function getPublicScenario(sessionId: string, applicantUserId: bigi
           questions: (cfg.questions ?? []).map((q) => ({
             id: q.id,
             text: q.text,
+            image: q.image,
             options: q.options,
+            optionImages: q.optionImages,
           })),
         },
       };

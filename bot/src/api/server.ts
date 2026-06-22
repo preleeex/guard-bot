@@ -36,10 +36,11 @@ export function buildApp() {
   // backend (no HTML), and cross-origin access is governed by our own CORS.
   app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
 
-  // Cap request body size to blunt large-payload abuse.
+  // Cap request body size to blunt large-payload abuse. 2mb leaves room for
+  // scenarios that embed downscaled images.
   app.use(
     express.json({
-      limit: "256kb",
+      limit: "2mb",
       verify: (req, _res, buf) => {
         (req as unknown as { rawBody?: string }).rawBody = buf.toString("utf8");
       },

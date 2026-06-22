@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { prisma } from "../db";
-import { config, BUNDLE_SLOTS, BUNDLE_PRICE_USD } from "../config";
+import { config, PLANS, type PlanKey } from "../config";
 import { logger } from "../logger";
 import { sendSystemLog } from "../telegram/systemLog";
 
@@ -39,18 +39,19 @@ async function cryptoPayCall<T>(method: string, body: Record<string, unknown>): 
   return data.result as T;
 }
 
-// Create an invoice for one bundle (+3 group slots) and persist a pending row.
-export async function createBundleInvoice(userId: bigint): Promise<{
-  payUrl: string;
-  invoiceId: string;
-}> {
-  const payload = JSON.stringify({ userId: userId.toString(), bundles: 1 });
+// Create an invoice for a paid plan and persist a pending payment row.
+export async function createInvoiceForPlan(
+  userId: bigint,
+  planKey: PlanKey
+): Promise<{ payUrl: string; invoiceId: string }> {
+  const plan = PLANS[planKey];
+  const payload = JSON.stringify({ userId: userId.toString(), plan: planKey });
 
   const invoice = await cryptoPayCall<CryptoPayInvoice>("createInvoice", {
     currency_type: "fiat",
     fiat: "USD",
-    amount: BUNDLE_PRICE_USD,
-    description: "Guard Bot: +3 группы",
+    amount: plan.price,
+    description: `Guard Bot: ${plan.title}`,
     payload,
     paid_btn_name: "callback",
     paid_btn_url: config.miniAppUrl,
@@ -62,9 +63,9 @@ export async function createBundleInvoice(userId: bigint): Promise<{
       userId,
       invoiceId: String(invoice.invoice_id),
       status: "active",
-      amount: BUNDLE_PRICE_USD,
+      amount: plan.price,
       currency: "USD",
-      slotsAdded: BUNDLE_SLOTS,
+      slotsAdded: plan.slots,
     },
   });
 

@@ -162,11 +162,11 @@ function Home({
     }
   };
 
-  const buySlots = async () => {
+  const buyPlan = async (plan: string) => {
     setBuying(true);
     setError("");
     try {
-      const res = await api.post<{ payUrl: string }>("/api/payments/invoice");
+      const res = await api.post<{ payUrl: string }>("/api/payments/invoice", { plan });
       if (res.payUrl) {
         openExternal(res.payUrl);
         setAwaiting(true);
@@ -273,8 +273,14 @@ function Home({
             </p>
           ) : (
             <>
-              <Button disabled={buying} onClick={buySlots}>
-                Купить +3 группы, 3.99$
+              <Button disabled={buying} onClick={() => buyPlan("small")}>
+                +5 групп — 2.99$
+              </Button>
+              <Button variant="secondary" disabled={buying} onClick={() => buyPlan("big")}>
+                +15 групп — 6.99$
+              </Button>
+              <Button variant="secondary" disabled={buying} onClick={() => buyPlan("unlimited")}>
+                Безлимит — 14.99$
               </Button>
               {awaiting ? (
                 <Button variant="secondary" disabled={checking} onClick={checkPayment}>

@@ -13,7 +13,9 @@ export interface CaptchaConfig {
 export interface QuizQuestion {
   id: string;
   text: string;
+  image?: string; // data URL for the question image
   options: string[];
+  optionImages?: (string | null)[]; // data URL per option (aligned by index)
   correct?: number[]; // present only in the owner builder, never to applicants
 }
 

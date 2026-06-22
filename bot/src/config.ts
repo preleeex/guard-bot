@@ -39,10 +39,17 @@ export function requiredChannelUrl(): string | undefined {
   return `https://t.me/${config.requiredChannel.replace(/^@/, "")}`;
 }
 
-// Quota and pricing, fixed by the spec.
+// Quota and pricing.
 export const FREE_GROUP_SLOTS = 3;
-export const BUNDLE_SLOTS = 3;
-export const BUNDLE_PRICE_USD = "3.99";
+
+// Paid plans (one-time). "unlimited" grants a very large slot count.
+export const PLANS = {
+  small: { slots: 5, price: "2.99", title: "+5 групп" },
+  big: { slots: 15, price: "6.99", title: "+15 групп" },
+  unlimited: { slots: 9999, price: "14.99", title: "Безлимит" },
+} as const;
+
+export type PlanKey = keyof typeof PLANS;
 
 export function isBotOwner(userId: bigint | number): boolean {
   return BigInt(userId) === config.ownerUserId;

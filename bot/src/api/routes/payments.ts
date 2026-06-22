@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { logger } from "../../logger";
 import { requireInitData } from "../auth";
+import { PLANS, type PlanKey } from "../../config";
 import {
-  createBundleInvoice,
+  createInvoiceForPlan,
   verifyWebhookSignature,
   handlePaidInvoice,
   verifyUserInvoices,
@@ -13,8 +14,13 @@ export const paymentsRouter = Router();
 paymentsRouter.use(requireInitData);
 
 paymentsRouter.post("/invoice", async (req, res) => {
+  const plan = String(req.body?.plan ?? "");
+  if (!(plan in PLANS)) {
+    res.status(400).json({ error: "invalid_plan" });
+    return;
+  }
   try {
-    const result = await createBundleInvoice(req.tgUser!.id);
+    const result = await createInvoiceForPlan(req.tgUser!.id, plan as PlanKey);
     res.json(result);
   } catch (err) {
     logger.error("create invoice failed", { err: String(err) });

@@ -70,16 +70,25 @@ export function BlockForm({
         <p className="subtitle">Вопросы</p>
         {(cfg.questions ?? []).map((q) => (
           <div className="col" key={q.id}>
+            {q.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="q-img" src={q.image} alt="" />
+            ) : null}
             <p style={{ margin: 0 }}>{q.text}</p>
             {q.options.map((opt, idx) => {
               const isSel = (selected[q.id] ?? []).includes(idx);
+              const optImg = (q.optionImages ?? [])[idx];
               return (
                 <div
                   key={idx}
                   className={`option ${isSel ? "selected" : ""}`}
                   onClick={() => toggle(q.id, idx)}
                 >
-                  {opt}
+                  {optImg ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="opt-img" src={optImg} alt="" />
+                  ) : null}
+                  <span>{opt}</span>
                 </div>
               );
             })}

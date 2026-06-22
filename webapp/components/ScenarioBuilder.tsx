@@ -12,6 +12,7 @@ import type {
 } from "@/lib/types";
 import { Button, IconButton } from "./ui";
 import { ArrowUpIcon, ArrowDownIcon, TrashIcon } from "./icons";
+import { pickImage } from "@/lib/image";
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -116,9 +117,6 @@ export function ScenarioBuilder({
         <Button small variant="secondary" onClick={() => onChange([...blocks, newBlock("rules")])}>
           + Правила
         </Button>
-        <Button small variant="secondary" onClick={() => onChange([...blocks, newBlock("media")])}>
-          + Медиа
-        </Button>
       </div>
     </div>
   );
@@ -167,6 +165,12 @@ function QuizEditor({
   const updateQ = (qi: number, patch: Partial<QuizQuestion>) =>
     setQuestions(questions.map((q, i) => (i === qi ? { ...q, ...patch } : q)));
 
+  const setOptImage = (qi: number, oi: number, url: string | null) => {
+    const imgs = (questions[qi].optionImages ?? []).slice();
+    imgs[oi] = url;
+    updateQ(qi, { optionImages: imgs });
+  };
+
   return (
     <div className="col">
       <label className="hint">Проходной балл, %</label>
@@ -186,32 +190,75 @@ function QuizEditor({
             value={q.text}
             onChange={(e) => updateQ(qi, { text: e.target.value })}
           />
+          {q.image ? (
+            <div className="row">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="thumb" src={q.image} alt="" />
+              <Button small variant="danger" onClick={() => updateQ(qi, { image: undefined })}>
+                Убрать фото
+              </Button>
+            </div>
+          ) : (
+            <Button
+              small
+              variant="secondary"
+              onClick={async () => {
+                const url = await pickImage();
+                if (url) updateQ(qi, { image: url });
+              }}
+            >
+              Фото вопроса
+            </Button>
+          )}
           {q.options.map((opt, oi) => {
             const correct = q.correct ?? [];
             const isCorrect = correct.includes(oi);
+            const optImg = (q.optionImages ?? [])[oi];
             return (
-              <div className="row" key={oi}>
-                <input
-                  className="field"
-                  placeholder={`Вариант ${oi + 1}`}
-                  value={opt}
-                  onChange={(e) =>
-                    updateQ(qi, {
-                      options: q.options.map((o, i) => (i === oi ? e.target.value : o)),
-                    })
-                  }
-                />
-                <Button
-                  small
-                  variant={isCorrect ? "primary" : "secondary"}
-                  onClick={() =>
-                    updateQ(qi, {
-                      correct: isCorrect ? correct.filter((c) => c !== oi) : [...correct, oi],
-                    })
-                  }
-                >
-                  {isCorrect ? "Верный" : "Неверный"}
-                </Button>
+              <div className="col" key={oi}>
+                <div className="row">
+                  <input
+                    className="field"
+                    placeholder={`Вариант ${oi + 1}`}
+                    value={opt}
+                    onChange={(e) =>
+                      updateQ(qi, {
+                        options: q.options.map((o, i) => (i === oi ? e.target.value : o)),
+                      })
+                    }
+                  />
+                  <Button
+                    small
+                    variant={isCorrect ? "primary" : "secondary"}
+                    onClick={() =>
+                      updateQ(qi, {
+                        correct: isCorrect ? correct.filter((c) => c !== oi) : [...correct, oi],
+                      })
+                    }
+                  >
+                    {isCorrect ? "Верный" : "Неверный"}
+                  </Button>
+                </div>
+                {optImg ? (
+                  <div className="row">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img className="thumb" src={optImg} alt="" />
+                    <Button small variant="danger" onClick={() => setOptImage(qi, oi, null)}>
+                      Убрать
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    small
+                    variant="secondary"
+                    onClick={async () => {
+                      const url = await pickImage();
+                      if (url) setOptImage(qi, oi, url);
+                    }}
+                  >
+                    Фото варианта
+                  </Button>
+                )}
               </div>
             );
           })}

@@ -19,7 +19,9 @@ export interface CaptchaConfig {
 export interface QuizQuestion {
   id: string;
   text: string;
+  image?: string; // data URL for the question image
   options: string[];
+  optionImages?: (string | null)[]; // data URL per option
   // indexes of correct options (single or multiple correct)
   correct: number[];
 }
