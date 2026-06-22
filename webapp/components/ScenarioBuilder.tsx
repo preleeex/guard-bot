@@ -184,7 +184,7 @@ function QuizEditor({
 
   return (
     <div className="col">
-      <label className="hint">Сколько верных нужно (из {questions.length})</label>
+      <label className="hint">Сколько верных нужно</label>
       <input
         className="field"
         inputMode="numeric"
@@ -207,7 +207,7 @@ function QuizEditor({
           {q.image ? (
             <div className="col">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="thumb-lg" src={q.image} alt="" />
+              <img className={`q-img q-img-${q.imageSize ?? "l"}`} src={q.image} alt="" />
               <div className="row" style={{ gap: 8 }}>
                 <select
                   className="field"

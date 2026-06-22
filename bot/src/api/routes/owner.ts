@@ -1,8 +1,15 @@
 import { Router } from "express";
 import { config, FREE_GROUP_SLOTS } from "../../config";
 import { logger } from "../../logger";
-import { requireInitData } from "../auth";
-import { getChat, getEmojiStatus, TelegramApiError } from "../../telegram/api";
+import { requireInitData, validateInitData } from "../auth";
+import {
+  getChat,
+  getEmojiStatus,
+  getUserProfilePhotoFileId,
+  getFilePath,
+  FILE_ROOT,
+  TelegramApiError,
+} from "../../telegram/api";
 import {
   connectGroup,
   listGroups,
@@ -25,6 +32,37 @@ async function isPremiumOwner(userId: bigint): Promise<boolean> {
 }
 
 export const ownerRouter = Router();
+
+// Avatar proxy. Public because an <img> tag cannot send the initData header, so
+// the caller passes validated initData as a query param. Streams the user's own
+// Telegram profile photo (never exposes the bot token in the file URL).
+ownerRouter.get("/avatar", async (req, res) => {
+  try {
+    const v = validateInitData(String(req.query.i ?? ""));
+    if (!v.ok || !v.user) {
+      res.sendStatus(401);
+      return;
+    }
+    const fileId = await getUserProfilePhotoFileId(Number(v.user.id));
+    const filePath = fileId ? await getFilePath(fileId) : null;
+    if (!filePath) {
+      res.sendStatus(404);
+      return;
+    }
+    const tgRes = await fetch(`${FILE_ROOT}/${filePath}`);
+    if (!tgRes.ok) {
+      res.sendStatus(404);
+      return;
+    }
+    res.setHeader("Content-Type", tgRes.headers.get("content-type") ?? "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.send(Buffer.from(await tgRes.arrayBuffer()));
+  } catch (err) {
+    logger.warn("avatar proxy failed", { err: String(err) });
+    res.sendStatus(404);
+  }
+});
+
 ownerRouter.use(requireInitData);
 
 function parseChatId(raw: string): bigint {

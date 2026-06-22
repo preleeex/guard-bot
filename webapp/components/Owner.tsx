@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import { openExternal, getProfile } from "@/lib/telegram";
+import { openExternal, getProfile, getInitData } from "@/lib/telegram";
 import { ADD_TO_GROUP_LINK } from "@/lib/config";
 import { GIF } from "@/lib/assets";
 import type { Group, QuotaStatus } from "@/lib/types";
@@ -159,6 +159,12 @@ function Home({
   const { quota, groups, isOperator } = data;
   const profile = getProfile();
   const profileName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
+  // Telegram often omits photo_url in initData; fall back to the backend proxy
+  // that fetches the user's real avatar via getUserProfilePhotos.
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+  const avatarUrl =
+    profile?.photoUrl ||
+    (apiBase ? `${apiBase}/api/owner/avatar?i=${encodeURIComponent(getInitData())}` : undefined);
   const [tab, setTab] = useState<Tab>("groups");
 
   const [chat, setChat] = useState("");
@@ -213,7 +219,7 @@ function Home({
   return (
     <div className="app has-bottom-nav">
       <div className="profile-bar">
-        <Avatar photoUrl={profile?.photoUrl} name={profileName} size={40} />
+        <Avatar photoUrl={avatarUrl} name={profileName} size={40} />
         <div>
           <p className="profile-name" style={{ fontSize: 16 }}>
             {profileName || "Профиль"}

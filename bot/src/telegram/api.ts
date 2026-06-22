@@ -134,6 +134,32 @@ export async function getEmojiStatus(userId: number | bigint): Promise<string | 
   return info?.emoji_status_custom_emoji_id ?? null;
 }
 
+interface PhotoSize {
+  file_id: string;
+  width: number;
+  height: number;
+}
+
+// file_id of a user's largest current profile photo, or null if none / hidden.
+export async function getUserProfilePhotoFileId(userId: number | bigint): Promise<string | null> {
+  const res = await tryCallApi<{ total_count: number; photos: PhotoSize[][] }>(
+    "getUserProfilePhotos",
+    { user_id: Number(userId), limit: 1 }
+  );
+  const first = res?.photos?.[0];
+  if (!first || first.length === 0) return null;
+  return first[first.length - 1].file_id; // last size is the largest
+}
+
+// Resolve a file_id to its temporary file path on Telegram's file server.
+export async function getFilePath(fileId: string): Promise<string | null> {
+  const res = await tryCallApi<{ file_path?: string }>("getFile", { file_id: fileId });
+  return res?.file_path ?? null;
+}
+
+// Root for downloading files by path. Holds the bot token, never expose it.
+export const FILE_ROOT = `https://api.telegram.org/file/bot${config.botToken}`;
+
 // ---------------------------------------------------------------------------
 // Join request handling. We prefer the query methods and fall back to the
 // stable approve/decline methods when the query mode is unavailable.

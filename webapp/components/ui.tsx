@@ -163,6 +163,7 @@ export function Avatar({
   name?: string;
   size?: number;
 }) {
+  const [failed, setFailed] = useState(false);
   const initials = (name ?? "")
     .split(" ")
     .map((p) => p[0])
@@ -170,9 +171,18 @@ export function Avatar({
     .slice(0, 2)
     .join("")
     .toUpperCase();
-  if (photoUrl) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img className="avatar" src={photoUrl} alt="" style={{ width: size, height: size }} />;
+  if (photoUrl && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        className="avatar"
+        src={photoUrl}
+        alt=""
+        referrerPolicy="no-referrer"
+        style={{ width: size, height: size }}
+        onError={() => setFailed(true)}
+      />
+    );
   }
   return (
     <div className="avatar avatar-fallback" style={{ width: size, height: size }}>
