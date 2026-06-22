@@ -10,10 +10,13 @@ export interface CaptchaConfig {
   buttonLabel?: string;
 }
 
+export type ImageSize = "s" | "m" | "l";
+
 export interface QuizQuestion {
   id: string;
   text: string;
   image?: string; // data URL for the question image
+  imageSize?: ImageSize; // display size of the question image
   options: string[];
   optionImages?: (string | null)[]; // data URL per option (aligned by index)
   correct?: number[]; // present only in the owner builder, never to applicants

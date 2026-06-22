@@ -499,10 +499,47 @@ textarea.field {
 
 .q-img {
   width: 100%;
-  max-height: 240px;
   object-fit: contain;
   border-radius: 10px;
   background: var(--tg-secondary-bg);
+}
+
+.q-img-s {
+  max-height: 180px;
+}
+.q-img-m {
+  max-height: 320px;
+}
+.q-img-l {
+  max-height: 70vh;
+}
+
+.thumb-lg {
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: var(--tg-secondary-bg);
+}
+
+/* Quiz option grouping */
+.opt-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--tg-secondary-bg);
+}
+
+.opt-item .field {
+  background: var(--tg-bg);
+}
+
+.opt-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .opt-img {

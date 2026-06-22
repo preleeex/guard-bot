@@ -9,6 +9,7 @@ import {
   unmuteMember,
   kickMember,
   deleteMessage,
+  tryCallApi,
   type JoinDecision,
 } from "../telegram/api";
 import { getScenario } from "./scenarios";
@@ -128,6 +129,7 @@ export async function getPublicScenario(sessionId: string, applicantUserId: bigi
             id: q.id,
             text: q.text,
             image: q.image,
+            imageSize: q.imageSize,
             options: q.options,
             optionImages: q.optionImages,
           })),
@@ -383,6 +385,17 @@ export async function submitScreening(
     startedAt: session.createdAt,
   });
 
+  await notifyOwnerDecision({
+    ownerUserId: group.ownerUserId,
+    chatTitle: group.title,
+    applicantUserId: session.applicantUserId,
+    applicantUsername: session.applicantUsername,
+    applicantName: session.applicantName,
+    decision,
+    reason,
+    score,
+  });
+
   return { decision, score, reason };
 }
 
@@ -423,9 +436,54 @@ export async function expireDueSessions(): Promise<number> {
       answers: [],
       startedAt: session.createdAt,
     });
+
+    if (group) {
+      await notifyOwnerDecision({
+        ownerUserId: group.ownerUserId,
+        chatTitle: group.title,
+        applicantUserId: session.applicantUserId,
+        applicantUsername: session.applicantUsername,
+        applicantName: session.applicantName,
+        decision: "timeout",
+        reason: `Таймаут, действие: ${decision}.`,
+      });
+    }
     handled += 1;
   }
   return handled;
+}
+
+// DM the group owner about a screening decision, with a profile button.
+async function notifyOwnerDecision(params: {
+  ownerUserId: bigint;
+  chatTitle?: string | null;
+  applicantUserId: bigint;
+  applicantUsername?: string | null;
+  applicantName?: string | null;
+  decision: string;
+  reason: string;
+  score?: number | null;
+}): Promise<void> {
+  const mark = params.decision === "approve" ? "✅" : params.decision === "decline" ? "❌" : "⏳";
+  const who = params.applicantUsername
+    ? `@${params.applicantUsername}`
+    : params.applicantName ?? String(params.applicantUserId);
+  const lines = [
+    `${mark} ${who} (id: ${params.applicantUserId})`,
+    params.chatTitle ? `Группа: ${params.chatTitle}` : "",
+    params.score != null ? `Балл: ${params.score}` : "",
+    params.reason,
+  ].filter(Boolean);
+
+  const reply_markup = params.applicantUsername
+    ? { inline_keyboard: [[{ text: "Профиль", url: `https://t.me/${params.applicantUsername}` }]] }
+    : undefined;
+
+  await tryCallApi("sendMessage", {
+    chat_id: Number(params.ownerUserId),
+    text: lines.join("\n"),
+    reply_markup,
+  });
 }
 
 export class ScreeningError extends Error {

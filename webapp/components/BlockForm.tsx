@@ -72,7 +72,7 @@ export function BlockForm({
           <div className="col" key={q.id}>
             {q.image ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img className="q-img" src={q.image} alt="" />
+              <img className={`q-img q-img-${q.imageSize ?? "l"}`} src={q.image} alt="" />
             ) : null}
             <p style={{ margin: 0 }}>{q.text}</p>
             {q.options.map((opt, idx) => {

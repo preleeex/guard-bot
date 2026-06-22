@@ -20,6 +20,7 @@ export interface QuizQuestion {
   id: string;
   text: string;
   image?: string; // data URL for the question image
+  imageSize?: "s" | "m" | "l"; // display size of the question image
   options: string[];
   optionImages?: (string | null)[]; // data URL per option
   // indexes of correct options (single or multiple correct)

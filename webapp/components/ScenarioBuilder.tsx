@@ -205,41 +205,55 @@ function QuizEditor({
             onChange={(e) => updateQ(qi, { text: e.target.value })}
           />
           {q.image ? (
-            <div className="row">
+            <div className="col">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="thumb" src={q.image} alt="" />
-              <IconButton variant="danger" onClick={() => updateQ(qi, { image: undefined })} aria-label="Убрать фото">
-                <TrashIcon size={18} />
-              </IconButton>
+              <img className="thumb-lg" src={q.image} alt="" />
+              <div className="row" style={{ gap: 8 }}>
+                <select
+                  className="field"
+                  value={q.imageSize ?? "l"}
+                  onChange={(e) => updateQ(qi, { imageSize: e.target.value as "s" | "m" | "l" })}
+                >
+                  <option value="s">Размер: маленькое</option>
+                  <option value="m">Размер: среднее</option>
+                  <option value="l">Размер: большое</option>
+                </select>
+                <IconButton variant="danger" onClick={() => updateQ(qi, { image: undefined })} aria-label="Убрать">
+                  <TrashIcon size={18} />
+                </IconButton>
+              </div>
             </div>
           ) : (
-            <IconButton
-              aria-label="Фото вопроса"
+            <Button
+              small
+              variant="secondary"
               onClick={async () => {
                 const url = await pickImage();
                 if (url) updateQ(qi, { image: url });
               }}
             >
-              <UploadIcon size={18} />
-            </IconButton>
+              <span className="btn-icon">
+                <UploadIcon size={18} /> Фото вопроса
+              </span>
+            </Button>
           )}
           {q.options.map((opt, oi) => {
             const correct = q.correct ?? [];
             const isCorrect = correct.includes(oi);
             const optImg = (q.optionImages ?? [])[oi];
             return (
-              <div className="col" key={oi}>
-                <div className="row">
-                  <input
-                    className="field"
-                    placeholder={`Вариант ${oi + 1}`}
-                    value={opt}
-                    onChange={(e) =>
-                      updateQ(qi, {
-                        options: q.options.map((o, i) => (i === oi ? e.target.value : o)),
-                      })
-                    }
-                  />
+              <div className="opt-item" key={oi}>
+                <input
+                  className="field"
+                  placeholder={`Вариант ${oi + 1}`}
+                  value={opt}
+                  onChange={(e) =>
+                    updateQ(qi, {
+                      options: q.options.map((o, i) => (i === oi ? e.target.value : o)),
+                    })
+                  }
+                />
+                <div className="opt-controls">
                   <IconButton
                     aria-label="Фото варианта"
                     onClick={async () => {
@@ -260,15 +274,15 @@ function QuizEditor({
                   >
                     {isCorrect ? "Верный" : "Неверный"}
                   </Button>
-                </div>
-                {optImg ? (
-                  <div className="row">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img className="thumb" src={optImg} alt="" />
-                    <IconButton variant="danger" onClick={() => setOptImage(qi, oi, null)} aria-label="Убрать">
+                  {optImg ? (
+                    <IconButton variant="danger" onClick={() => setOptImage(qi, oi, null)} aria-label="Убрать фото">
                       <TrashIcon size={18} />
                     </IconButton>
-                  </div>
+                  ) : null}
+                </div>
+                {optImg ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="thumb" src={optImg} alt="" />
                 ) : null}
               </div>
             );
