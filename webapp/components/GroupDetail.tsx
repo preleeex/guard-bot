@@ -31,6 +31,7 @@ export function GroupDetail({
   const [group, setGroup] = useState<Group | null>(null);
   const [blocks, setBlocks] = useState<ScenarioBlock[]>([]);
   const [chatUsername, setChatUsername] = useState<string | null>(null);
+  const [premium, setPremium] = useState(false);
   const [tab, setTab] = useState<Tab>(initialJournalUserId ? "journal" : "scenario");
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,13 +39,14 @@ export function GroupDetail({
 
   useEffect(() => {
     api
-      .get<{ group: Group; scenario: ScenarioBlock[]; chatUsername: string | null }>(
+      .get<{ group: Group; scenario: ScenarioBlock[]; chatUsername: string | null; premium: boolean }>(
         `/api/owner/groups/${chatId}`
       )
       .then((data) => {
         setGroup(data.group);
         setBlocks(data.scenario);
         setChatUsername(data.chatUsername);
+        setPremium(data.premium);
       })
       .finally(() => setLoading(false));
   }, [chatId]);
@@ -80,6 +82,9 @@ export function GroupDetail({
         timeoutSeconds: group.timeoutSeconds,
         timeoutAction: group.timeoutAction,
         cooldownSeconds: group.cooldownSeconds,
+        voiceScreening: group.voiceScreening,
+        voicePrompt: group.voicePrompt,
+        emojiGate: group.emojiGate,
       });
       setGroup(res.group);
       setStatus("Настройки сохранены.");
@@ -158,7 +163,15 @@ export function GroupDetail({
       ) : null}
 
       {tab === "settings" ? (
-        <SettingsForm group={group} setGroup={setGroup} setPolicy={setPolicy} onSave={saveSettings} saving={saving} />
+        <SettingsForm
+          group={group}
+          setGroup={setGroup}
+          setPolicy={setPolicy}
+          onSave={saveSettings}
+          saving={saving}
+          premium={premium}
+          chatId={chatId}
+        />
       ) : null}
 
       {tab === "journal" ? (
@@ -174,15 +187,36 @@ function SettingsForm({
   setPolicy,
   onSave,
   saving,
+  premium,
+  chatId,
 }: {
   group: Group;
   setGroup: (g: Group) => void;
   setPolicy: (p: Partial<ResultPolicy>) => void;
   onSave: () => void;
   saving: boolean;
+  premium: boolean;
+  chatId: string;
 }) {
   const policy = group.resultPolicy;
   const useThreshold = policy.queueThreshold != null;
+  const [emojiBusy, setEmojiBusy] = useState(false);
+  const [emojiMsg, setEmojiMsg] = useState("");
+
+  const setMyEmojiStatus = async (clear: boolean) => {
+    setEmojiBusy(true);
+    setEmojiMsg("");
+    try {
+      const res = await api.post<{ group: Group }>(`/api/owner/groups/${chatId}/emoji-status`, { clear });
+      setGroup(res.group);
+      setEmojiMsg(clear ? "Эмодзи-статус сброшен." : "Эмодзи-статус сохранён.");
+    } catch (e) {
+      setEmojiMsg((e as ApiError).message || "Не удалось.");
+    } finally {
+      setEmojiBusy(false);
+    }
+  };
+
   return (
     <Card>
       <span className="icon-row">
@@ -253,6 +287,55 @@ function SettingsForm({
           setGroup({ ...group, cooldownSeconds: Math.max(0, Number(e.target.value) || 0) })
         }
       />
+
+      <div className="divider" />
+      <div className="row">
+        <span className="icon-row">
+          <span>Голосовая проверка</span>
+          <InfoTip text="Вместо Mini App заявителя просят записать голосовое боту в личку. Вы получаете его с кнопками Принять и Отклонить. Заменяет сценарий." />
+        </span>
+        <Toggle
+          checked={group.voiceScreening}
+          onChange={(v) => setGroup({ ...group, voiceScreening: v })}
+        />
+      </div>
+      {group.voiceScreening ? (
+        <textarea
+          className="field"
+          placeholder="Что записать (например: коротко расскажите о себе)"
+          value={group.voicePrompt ?? ""}
+          onChange={(e) => setGroup({ ...group, voicePrompt: e.target.value })}
+        />
+      ) : null}
+
+      <div className="divider" />
+      <span className="icon-row">
+        <p className="subtitle">Эмодзи-статус</p>
+        <InfoTip text="Пускать только тех, у кого установлен нужный эмодзи-статус. Поставьте себе нужный статус и нажмите кнопку ниже, чтобы задать требование. Платная функция." />
+      </span>
+      {premium ? (
+        <div className="col">
+          <p className="hint">
+            {group.emojiStatusId ? "Требование задано." : "Требование не задано."}
+          </p>
+          <Button
+            small
+            variant="secondary"
+            disabled={emojiBusy}
+            onClick={() => setMyEmojiStatus(false)}
+          >
+            Использовать мой текущий эмодзи-статус
+          </Button>
+          {group.emojiStatusId ? (
+            <Button small variant="danger" disabled={emojiBusy} onClick={() => setMyEmojiStatus(true)}>
+              Сбросить требование
+            </Button>
+          ) : null}
+          {emojiMsg ? <p className="hint">{emojiMsg}</p> : null}
+        </div>
+      ) : (
+        <p className="hint">Доступно на платном тарифе (более 3 групп).</p>
+      )}
 
       <Button disabled={saving} onClick={onSave}>
         Сохранить

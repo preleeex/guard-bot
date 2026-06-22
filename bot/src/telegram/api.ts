@@ -85,6 +85,9 @@ export interface ChatInfo {
   type: string;
   title?: string;
   username?: string;
+  // Custom emoji id of the user's emoji status. Returned only via getChat for a
+  // private chat (the other party), and only if the bot can resolve that user.
+  emoji_status_custom_emoji_id?: string;
   // Bot API 10.1: which bot is assigned as guard bot (admins only).
   guard_bot?: { id: number; username?: string };
 }
@@ -105,6 +108,30 @@ export async function sendMessage(
     reply_markup: replyMarkup,
     disable_web_page_preview: true,
   });
+}
+
+// Re-send a voice message by its file_id (used to forward an applicant's voice
+// note to the group owner for manual review).
+export async function sendVoice(
+  chatId: number | bigint,
+  fileId: string,
+  caption?: string,
+  replyMarkup?: unknown
+): Promise<unknown> {
+  return callApi("sendVoice", {
+    chat_id: Number(chatId),
+    voice: fileId,
+    caption,
+    reply_markup: replyMarkup,
+  });
+}
+
+// Read a user's current emoji status (premium custom emoji), or null if unset
+// or unreadable. Only works when the bot can resolve the user via getChat
+// (e.g. the user has started the bot).
+export async function getEmojiStatus(userId: number | bigint): Promise<string | null> {
+  const info = await tryCallApi<ChatInfo>("getChat", { chat_id: Number(userId) });
+  return info?.emoji_status_custom_emoji_id ?? null;
 }
 
 // ---------------------------------------------------------------------------

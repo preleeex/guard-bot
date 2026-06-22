@@ -1,6 +1,6 @@
 import { prisma } from "../db";
 import { config, requiredChannelUrl } from "../config";
-import { getChatMember } from "../telegram/api";
+import { getChatMember, getEmojiStatus } from "../telegram/api";
 import { logger } from "../logger";
 
 // --- bans ------------------------------------------------------------------
@@ -37,6 +37,25 @@ export async function isOnCooldown(
   });
   if (!last) return false;
   return Date.now() - last.finishedAt.getTime() < cooldownSeconds * 1000;
+}
+
+// --- emoji-status gate -----------------------------------------------------
+
+// Whether the user's current emoji status matches the required one. Fails
+// closed (returns false) when the status cannot be read, because the gate is a
+// deliberate, opt-in paid restriction: the applicant is told how to fix it.
+export async function hasRequiredEmojiStatus(
+  userId: bigint,
+  requiredEmojiId: string
+): Promise<boolean> {
+  const current = await getEmojiStatus(userId);
+  if (current === null) {
+    logger.info("emoji gate: status unreadable, treating as not matching", {
+      userId: userId.toString(),
+    });
+    return false;
+  }
+  return current === requiredEmojiId;
 }
 
 // --- channel subscription gate ---------------------------------------------

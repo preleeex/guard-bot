@@ -49,6 +49,16 @@ model Group {
   // declined without opening the Mini App. 0 disables it.
   cooldownSeconds Int @default(0)
 
+  // Voice screening: instead of the Mini App, the applicant records a voice
+  // message in the bot DM and the owner approves/declines it manually.
+  voiceScreening Boolean @default(false)
+  voicePrompt    String?
+
+  // Emoji-status gate (paid feature): applicants must have a specific Telegram
+  // emoji status to be let in. `emojiStatusId` is the required custom_emoji_id.
+  emojiGate     Boolean @default(false)
+  emojiStatusId String?
+
   owner   User            @relation(fields: [ownerUserId], references: [id])
   blocks  ScenarioBlock[]
   journal JournalEntry[]
@@ -102,8 +112,10 @@ model ScreeningSession {
   applicantUsername String?
   applicantName     String?
   queryId           String?  @unique // present in query mode only
-  mode              String   @default("query") // "query" | "legacy"
-  status            String   @default("pending") // "pending" | "completed" | "expired"
+  mode              String   @default("query") // "query" | "legacy" | "member" | "voice"
+  status            String   @default("pending") // "pending" | "awaiting_review" | "completed" | "expired"
+  // Voice screening: file_id of the applicant's voice message, set once sent.
+  voiceFileId       String?
   // Server-generated secrets for verifiable blocks (e.g. captcha expected
   // answers), keyed by blockId. Never sent to the applicant.
   challenge         Json     @default("{}")

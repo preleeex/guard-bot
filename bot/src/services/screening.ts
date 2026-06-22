@@ -32,7 +32,7 @@ interface CreateSessionInput {
   applicantUsername?: string | null;
   applicantName?: string | null;
   queryId?: string | null;
-  mode: "query" | "legacy" | "member";
+  mode: "query" | "legacy" | "member" | "voice";
   timeoutSeconds: number;
 }
 

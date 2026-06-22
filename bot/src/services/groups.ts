@@ -130,6 +130,9 @@ export async function updateSettings(
     timeoutSeconds?: number;
     timeoutAction?: "queue" | "decline";
     cooldownSeconds?: number;
+    voiceScreening?: boolean;
+    voicePrompt?: string | null;
+    emojiGate?: boolean;
   }
 ) {
   await assertOwnerOf(chatId, userId);
@@ -142,6 +145,26 @@ export async function updateSettings(
       ...(data.timeoutSeconds !== undefined ? { timeoutSeconds: data.timeoutSeconds } : {}),
       ...(data.timeoutAction !== undefined ? { timeoutAction: data.timeoutAction } : {}),
       ...(data.cooldownSeconds !== undefined ? { cooldownSeconds: Math.max(0, data.cooldownSeconds) } : {}),
+      ...(data.voiceScreening !== undefined ? { voiceScreening: data.voiceScreening } : {}),
+      ...(data.voicePrompt !== undefined ? { voicePrompt: data.voicePrompt } : {}),
+      ...(data.emojiGate !== undefined ? { emojiGate: data.emojiGate } : {}),
+    },
+  });
+}
+
+// Save the required emoji status for the gate (the owner's current status). When
+// cleared (null) the gate has nothing to match and is effectively off.
+export async function setEmojiStatus(
+  chatId: bigint,
+  userId: bigint,
+  emojiStatusId: string | null
+) {
+  await assertOwnerOf(chatId, userId);
+  return prisma.group.update({
+    where: { chatId },
+    data: {
+      emojiStatusId,
+      ...(emojiStatusId ? { emojiGate: true } : { emojiGate: false }),
     },
   });
 }

@@ -62,6 +62,10 @@ export interface Group {
   timeoutSeconds: number;
   timeoutAction: "queue" | "decline";
   cooldownSeconds: number;
+  voiceScreening: boolean;
+  voicePrompt: string | null;
+  emojiGate: boolean;
+  emojiStatusId: string | null;
   _count?: { blocks: number };
 }
 
