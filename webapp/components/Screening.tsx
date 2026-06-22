@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { getWebApp, openExternal } from "@/lib/telegram";
+import { BOT_USERNAME } from "@/lib/config";
+import { t } from "@/lib/i18n";
 import { GIF } from "@/lib/assets";
 import type { ScenarioBlock } from "@/lib/types";
 import { Button, Card, Loading, Message } from "./ui";
@@ -20,21 +22,29 @@ interface ScenarioResponse {
   expiresAt: string;
   blocks: ScenarioBlock[];
   subscription?: Subscription;
+  voice?: boolean;
+  voicePrompt?: string | null;
 }
 
-const decisionText: Record<string, string> = {
-  approve: "Заявка одобрена.",
-  decline: "Заявка отклонена.",
-  queue: "Заявка отправлена на ручную проверку.",
-};
+const decisionText = (decision: string): string =>
+  decision === "approve"
+    ? t("approve")
+    : decision === "decline"
+    ? t("decline")
+    : decision === "queue"
+    ? t("queue")
+    : t("done");
 
 const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 export function Screening({ sessionId }: { sessionId: string | null }) {
-  const [state, setState] = useState<"loading" | "gate" | "form" | "done" | "error">("loading");
+  const [state, setState] = useState<"loading" | "gate" | "form" | "voice" | "done" | "error">(
+    "loading"
+  );
   const [error, setError] = useState<string>("");
   const [blocks, setBlocks] = useState<ScenarioBlock[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [voicePrompt, setVoicePrompt] = useState<string>("");
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, Payload>>({});
   const [result, setResult] = useState<string>("");
@@ -58,12 +68,15 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
       if (dl) setRemaining(Math.max(0, Math.floor((dl - Date.now()) / 1000)));
       if (data.subscription?.required && !data.subscription.subscribed) {
         setState("gate");
+      } else if (data.voice) {
+        setVoicePrompt(data.voicePrompt?.trim() || t("voice_default_prompt"));
+        setState("voice");
       } else {
         setState("form");
       }
     } catch (e) {
       setState("error");
-      setError((e as ApiError).message || "Не удалось загрузить проверку.");
+      setError((e as ApiError).message || t("load_failed"));
     }
   }, [sessionId]);
 
@@ -109,24 +122,24 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
           answers: payload,
         });
         setDecision(res.decision);
-        setResult(decisionText[res.decision] ?? "Проверка завершена.");
+        setResult(decisionText(res.decision));
         setState("done");
         setTimeout(() => getWebApp()?.close(), 2500);
       } catch (e) {
         setState("error");
-        setError((e as ApiError).message || "Ошибка отправки.");
+        setError((e as ApiError).message || t("send_error"));
       }
     },
     [sessionId, blocks, answers]
   );
 
-  if (state === "loading") return <Loading text="Проверка" />;
-  if (state === "error") return <Message title="Проверка недоступна" text={error} gif={GIF.empty} />;
+  if (state === "loading") return <Loading text={t("loading")} />;
+  if (state === "error") return <Message title={t("unavailable_title")} text={error} gif={GIF.empty} />;
   if (state === "done")
     return (
       <Message
         title={result}
-        text="Окно закроется автоматически."
+        text={t("closes_auto")}
         gif={decision === "decline" ? GIF.ban : undefined}
       />
     );
@@ -135,14 +148,33 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
     return (
       <div className="app">
         <Card>
-          <p className="title center">Подпишись на канал</p>
-          <p className="hint center">Чтобы вступить, подпишись на канал и нажми «Проверить».</p>
+          <p className="title center">{t("sub_title")}</p>
+          <p className="hint center">{t("sub_text")}</p>
           <Button onClick={() => subscription?.url && openExternal(subscription.url)}>
-            Открыть канал{subscription?.username ? ` @${subscription.username}` : ""}
+            {t("open_channel")}{subscription?.username ? ` @${subscription.username}` : ""}
           </Button>
           <Button variant="secondary" onClick={loadScenario}>
-            Проверить
+            {t("check")}
           </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  if (state === "voice") {
+    return (
+      <div className="app">
+        <Card>
+          <p className="title center">{t("voice_title")}</p>
+          <p className="hint center">{voicePrompt}</p>
+          <Button
+            onClick={() =>
+              openExternal(`https://t.me/${BOT_USERNAME}?start=voice_${sessionId ?? ""}`)
+            }
+          >
+            {t("voice_open_bot")}
+          </Button>
+          <p className="hint center">{t("voice_hint")}</p>
         </Card>
       </div>
     );
@@ -153,8 +185,8 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
     return (
       <div className="app">
         <Card>
-          <p className="title">Подтверждение вступления</p>
-          <Button onClick={submit}>Продолжить</Button>
+          <p className="title">{t("confirm_join")}</p>
+          <Button onClick={submit}>{t("continue")}</Button>
         </Card>
       </div>
     );
@@ -165,7 +197,7 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
       <Card>
         <div className="row">
           <p className="hint">
-            Шаг {step + 1} из {blocks.length}
+            {t("step")} {step + 1} {t("of")} {blocks.length}
           </p>
           {deadline ? <p className="hint timer">{formatTime(remaining)}</p> : null}
         </div>
@@ -178,16 +210,16 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
       <div className="col">
         {!isLast ? (
           <Button disabled={!canProceed} onClick={() => setStep((s) => s + 1)}>
-            Далее
+            {t("next")}
           </Button>
         ) : (
           <Button disabled={!canProceed} onClick={submit}>
-            Завершить
+            {t("finish")}
           </Button>
         )}
         {step > 0 ? (
           <Button variant="secondary" onClick={() => setStep((s) => s - 1)}>
-            Назад
+            {t("back")}
           </Button>
         ) : null}
       </div>

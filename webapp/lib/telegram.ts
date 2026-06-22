@@ -16,7 +16,7 @@ export interface TelegramThemeParams {
 export interface TelegramWebApp {
   initData: string;
   initDataUnsafe: {
-    user?: { id: number; username?: string; first_name?: string };
+    user?: { id: number; username?: string; first_name?: string; language_code?: string };
     start_param?: string;
   };
   themeParams: TelegramThemeParams;
@@ -95,6 +95,12 @@ export function getProfile(): TgProfile | null {
     username: u.username,
     photoUrl: u.photo_url,
   };
+}
+
+// Telegram client language of the current user (e.g. "en", "ru"). Defaults to
+// "ru" when unknown.
+export function getLanguage(): string {
+  return getWebApp()?.initDataUnsafe?.user?.language_code ?? "ru";
 }
 
 // The app must be opened inside Telegram: a real WebApp context provides a

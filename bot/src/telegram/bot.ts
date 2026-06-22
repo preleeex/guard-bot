@@ -9,11 +9,12 @@ import { markGroupRemoved, connectGroup } from "../services/groups";
 import { addJournalEntry } from "../services/journal";
 import {
   isBanned,
-  banUser,
+  banUserEverywhere,
   unbanUser,
   checkSubscription,
   isOnCooldown,
   hasRequiredEmojiStatus,
+  recordJoin,
 } from "../services/moderation";
 import { registerAdminCommands } from "./adminCommands";
 
@@ -70,6 +71,27 @@ bot.command("start", async (ctx) => {
     return;
   }
 
+  // Deep link: /start voice_<sessionId> opens the bot DM so the applicant can
+  // record a voice message even if they never started the bot before.
+  if (payload.startsWith("voice_")) {
+    const sessionId = payload.slice("voice_".length);
+    const session = await prisma.screeningSession.findUnique({ where: { id: sessionId } });
+    if (
+      session &&
+      session.applicantUserId === userId &&
+      session.mode === "voice" &&
+      session.status === "pending" &&
+      session.expiresAt.getTime() > Date.now()
+    ) {
+      const group = await prisma.group.findUnique({ where: { chatId: session.chatId } });
+      const prompt = group?.voicePrompt?.trim() || "Запишите голосовое сообщение, чтобы вступить в группу.";
+      await ctx.reply(`${prompt}\n\nОтправьте голосовое сообщение сюда, в этот чат.`);
+      return;
+    }
+    await ctx.reply("Проверка не найдена или уже завершена.");
+    return;
+  }
+
   // Panel entry requires a subscription to the operator's channel.
   const sub = await checkSubscription(userId);
   if (sub.required && !sub.subscribed) {
@@ -116,8 +138,14 @@ bot.command("ban", async (ctx) => {
     await ctx.reply("Использование: /ban <user_id> [причина]");
     return;
   }
-  await banUser(BigInt(target), BigInt(ctx.from.id), parts.slice(1).join(" ") || undefined);
-  await ctx.reply(`Забанен ${target}.`);
+  const { groupsLeft } = await banUserEverywhere(
+    BigInt(target),
+    BigInt(ctx.from.id),
+    parts.slice(1).join(" ") || undefined
+  );
+  await ctx.reply(
+    groupsLeft > 0 ? `Забанен ${target}. Бот вышел из групп: ${groupsLeft}.` : `Забанен ${target}.`
+  );
 });
 
 bot.command("unban", async (ctx) => {
@@ -175,6 +203,25 @@ bot.on("chat_join_request", async (ctx) => {
     return;
   }
 
+  // Anti-raid: during a surge of join requests, queue everything for manual
+  // review instead of opening a screening session per applicant.
+  const raid = recordJoin(chatId);
+  if (raid.raid) {
+    if (queryId) {
+      await tryCallApi("answerChatJoinRequestQuery", {
+        chat_join_request_query_id: queryId,
+        result: "queue",
+      });
+    }
+    if (raid.justStarted) {
+      await tryCallApi("sendMessage", {
+        chat_id: Number(group.ownerUserId),
+        text: "Замечен наплыв заявок. Включён режим карантина: заявки уходят в очередь на ручную проверку. Это временно.",
+      });
+    }
+    return;
+  }
+
   // Anti-spam cooldown: a recently declined applicant is auto-declined.
   if (await isOnCooldown(chatId, BigInt(applicant.id), group.cooldownSeconds)) {
     if (queryId) {
@@ -219,15 +266,11 @@ bot.on("chat_join_request", async (ctx) => {
     }
   }
 
-  // Voice screening: manual review. Keep the join request pending and ask the
-  // applicant to record a voice message in the bot DM; the owner decides later.
+  // Voice screening: manual review. The join request stays pending while the
+  // applicant records a voice message; the owner decides later. In query mode
+  // we show a Mini App with an "open bot" button (works even without a prior
+  // DM); in legacy mode we DM the prompt directly.
   if (group.voiceScreening) {
-    if (queryId) {
-      await tryCallApi("answerChatJoinRequestQuery", {
-        chat_join_request_query_id: queryId,
-        result: "queue",
-      });
-    }
     const voiceSession = await createScreeningSession({
       chatId,
       applicantUserId: BigInt(applicant.id),
@@ -238,15 +281,28 @@ bot.on("chat_join_request", async (ctx) => {
       timeoutSeconds: group.timeoutSeconds,
     });
     const prompt = group.voicePrompt?.trim() || "Запишите голосовое сообщение, чтобы вступить в группу.";
-    const dm = await tryCallApi("sendMessage", {
-      chat_id: applicant.id,
-      text: `${prompt}\n\nОтправьте голосовое сообщение сюда, в этот чат.`,
-    });
-    if (dm === null) {
-      logger.warn("voice screening: could not DM applicant", {
-        sessionId: voiceSession.id,
-        applicant: applicant.id,
+    if (queryId) {
+      const ok = await tryCallApi("sendChatJoinRequestWebApp", {
+        chat_join_request_query_id: queryId,
+        web_app_url: screeningUrl(voiceSession.id),
       });
+      if (ok === null) {
+        await tryCallApi("sendMessage", {
+          chat_id: applicant.id,
+          text: `${prompt}\n\nОтправьте голосовое сообщение сюда, в этот чат.`,
+        });
+      }
+    } else {
+      const dm = await tryCallApi("sendMessage", {
+        chat_id: applicant.id,
+        text: `${prompt}\n\nОтправьте голосовое сообщение сюда, в этот чат.`,
+      });
+      if (dm === null) {
+        logger.warn("voice screening: could not DM applicant", {
+          sessionId: voiceSession.id,
+          applicant: applicant.id,
+        });
+      }
     }
     return;
   }

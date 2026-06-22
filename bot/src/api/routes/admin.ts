@@ -3,6 +3,7 @@ import { logger } from "../../logger";
 import { requireInitData, requireOperator } from "../auth";
 import { getGlobalStats } from "../../services/stats";
 import { grantManualSlots } from "../../services/payments";
+import { banUserEverywhere, unbanUser, listBanned } from "../../services/moderation";
 
 export const adminRouter = Router();
 adminRouter.use(requireInitData, requireOperator);
@@ -11,6 +12,52 @@ adminRouter.use(requireInitData, requireOperator);
 adminRouter.get("/stats", async (_req, res) => {
   const stats = await getGlobalStats();
   res.json(stats);
+});
+
+// List banned users.
+adminRouter.get("/banned", async (_req, res) => {
+  const banned = await listBanned();
+  res.json({
+    banned: banned.map((b) => ({
+      userId: b.userId.toString(),
+      reason: b.reason,
+      createdAt: b.createdAt,
+    })),
+  });
+});
+
+// Ban a user everywhere: record the ban and pull the bot out of every group
+// they own.
+adminRouter.post("/ban", async (req, res) => {
+  const targetUserId = req.body?.userId;
+  const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() || undefined : undefined;
+  if (!targetUserId || !/^\d+$/.test(String(targetUserId))) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  try {
+    const { groupsLeft } = await banUserEverywhere(BigInt(targetUserId), req.tgUser!.id, reason);
+    res.json({ ok: true, groupsLeft });
+  } catch (err) {
+    logger.error("admin ban failed", { err: String(err) });
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// Unban a user.
+adminRouter.post("/unban", async (req, res) => {
+  const targetUserId = req.body?.userId;
+  if (!targetUserId || !/^\d+$/.test(String(targetUserId))) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  try {
+    await unbanUser(BigInt(targetUserId));
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error("admin unban failed", { err: String(err) });
+    res.status(500).json({ error: "internal" });
+  }
 });
 
 // Manually grant extra group slots to any user, no payment.

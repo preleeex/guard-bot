@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db";
-import { getChatMember, tryCallApi } from "../telegram/api";
+import { getBotId, getChat, getChatMember, tryCallApi } from "../telegram/api";
 import { canAddGroup } from "./quota";
 import { sendSystemLog } from "../telegram/systemLog";
 
@@ -167,6 +167,45 @@ export async function setEmojiStatus(
       ...(emojiStatusId ? { emojiGate: true } : { emojiGate: false }),
     },
   });
+}
+
+// Self-check a group's setup so the owner can see why guard might do nothing:
+// the bot must be an admin able to approve members, and the group must require
+// join approval (join requests). Returns a structured report.
+export async function checkGroupSetup(
+  chatId: bigint,
+  userId: bigint
+): Promise<{
+  botAdmin: boolean;
+  canApprove: boolean;
+  joinByRequest: boolean;
+  guardEnabled: boolean;
+  ok: boolean;
+}> {
+  const group = await assertOwnerOf(chatId, userId);
+
+  let botAdmin = false;
+  let canApprove = false;
+  let joinByRequest = false;
+
+  try {
+    const botId = await getBotId();
+    const member = await getChatMember(chatId, botId);
+    botAdmin = member.status === "administrator" || member.status === "creator";
+    canApprove = botAdmin && member.can_invite_users === true;
+  } catch {
+    // Bot likely not in the chat; leave both false.
+  }
+
+  try {
+    const info = await getChat(Number(chatId));
+    joinByRequest = info.join_by_request === true;
+  } catch {
+    // join_by_request unreadable; leave false.
+  }
+
+  const ok = botAdmin && canApprove && joinByRequest;
+  return { botAdmin, canApprove, joinByRequest, guardEnabled: group.guardEnabled, ok };
 }
 
 // Mark a group as removed when the bot is kicked or leaves. The binding row is

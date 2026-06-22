@@ -19,13 +19,19 @@ interface TelegramResponse<T> {
   result?: T;
   error_code?: number;
   description?: string;
+  parameters?: { retry_after?: number; migrate_to_chat_id?: number };
 }
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Raw call to any Bot API method. Used both for grammY-covered methods and for
 // the newer Join Request Queries methods that the SDK may not expose yet.
+// Automatically backs off and retries on 429 (flood control), which matters
+// during join-request spikes / raids.
 export async function callApi<T = unknown>(
   method: string,
-  params: Record<string, unknown> = {}
+  params: Record<string, unknown> = {},
+  attempt = 0
 ): Promise<T> {
   const res = await fetch(`${API_ROOT}/${method}`, {
     method: "POST",
@@ -34,6 +40,11 @@ export async function callApi<T = unknown>(
   });
   const data = (await res.json()) as TelegramResponse<T>;
   if (!data.ok) {
+    if (data.error_code === 429 && attempt < 3) {
+      const retryAfter = Math.min(data.parameters?.retry_after ?? 1, 30);
+      await sleep((retryAfter + 0.5) * 1000);
+      return callApi<T>(method, params, attempt + 1);
+    }
     throw new TelegramApiError(method, data.error_code, data.description);
   }
   return data.result as T;
@@ -80,6 +91,22 @@ export async function getMe(): Promise<BotInfo> {
   return callApi<BotInfo>("getMe");
 }
 
+let cachedBotId: number | null = null;
+
+// The bot's own user id, cached after the first lookup. Used to check the bot's
+// membership/rights inside a group.
+export async function getBotId(): Promise<number> {
+  if (cachedBotId == null) {
+    cachedBotId = (await getMe()).id;
+  }
+  return cachedBotId;
+}
+
+// Make the bot leave a chat.
+export async function leaveChat(chatId: number | bigint): Promise<void> {
+  await callApi("leaveChat", { chat_id: Number(chatId) });
+}
+
 export interface ChatInfo {
   id: number;
   type: string;
@@ -88,6 +115,8 @@ export interface ChatInfo {
   // Custom emoji id of the user's emoji status. Returned only via getChat for a
   // private chat (the other party), and only if the bot can resolve that user.
   emoji_status_custom_emoji_id?: string;
+  // Whether new members must be approved (join requests). Guard mode needs this.
+  join_by_request?: boolean;
   // Bot API 10.1: which bot is assigned as guard bot (admins only).
   guard_bot?: { id: number; username?: string };
 }
@@ -126,12 +155,22 @@ export async function sendVoice(
   });
 }
 
+// Short-lived cache of emoji status lookups to avoid hammering getChat during
+// join spikes (Telegram rate limits getChat).
+const emojiStatusCache = new Map<number, { value: string | null; at: number }>();
+const EMOJI_CACHE_TTL = 60_000;
+
 // Read a user's current emoji status (premium custom emoji), or null if unset
 // or unreadable. Only works when the bot can resolve the user via getChat
 // (e.g. the user has started the bot).
 export async function getEmojiStatus(userId: number | bigint): Promise<string | null> {
-  const info = await tryCallApi<ChatInfo>("getChat", { chat_id: Number(userId) });
-  return info?.emoji_status_custom_emoji_id ?? null;
+  const key = Number(userId);
+  const cached = emojiStatusCache.get(key);
+  if (cached && Date.now() - cached.at < EMOJI_CACHE_TTL) return cached.value;
+  const info = await tryCallApi<ChatInfo>("getChat", { chat_id: key });
+  const value = info?.emoji_status_custom_emoji_id ?? null;
+  emojiStatusCache.set(key, { value, at: Date.now() });
+  return value;
 }
 
 interface PhotoSize {

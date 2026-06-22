@@ -136,6 +136,8 @@ export function GroupDetail({
         </div>
       </Card>
 
+      <SetupCheck chatId={chatId} />
+
       <div className="row" style={{ gap: 8 }}>
         <Button small variant={tab === "scenario" ? "primary" : "secondary"} onClick={() => setTab("scenario")}>
           Сценарий
@@ -175,9 +177,116 @@ export function GroupDetail({
       ) : null}
 
       {tab === "journal" ? (
-        <JournalList chatId={chatId} decisionLabel={decisionLabel} highlightUserId={initialJournalUserId} />
+        <>
+          <StatsCard chatId={chatId} />
+          <JournalList chatId={chatId} decisionLabel={decisionLabel} highlightUserId={initialJournalUserId} />
+        </>
       ) : null}
     </div>
+  );
+}
+
+interface SetupReport {
+  botAdmin: boolean;
+  canApprove: boolean;
+  joinByRequest: boolean;
+  guardEnabled: boolean;
+  ok: boolean;
+}
+
+// On-demand diagnostics so the owner can see why guard might do nothing.
+function SetupCheck({ chatId }: { chatId: string }) {
+  const [report, setReport] = useState<SetupReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const run = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      setReport(await api.get<SetupReport>(`/api/owner/groups/${chatId}/check`));
+    } catch (e) {
+      setErr((e as ApiError).message || "Не удалось проверить.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const Line = ({ ok, label }: { ok: boolean; label: string }) => (
+    <div className="row">
+      <span className="hint">{label}</span>
+      <span className={`pill ${ok ? "approve" : "decline"}`}>{ok ? "ОК" : "Нет"}</span>
+    </div>
+  );
+
+  return (
+    <Card>
+      <Button small variant="secondary" disabled={busy} onClick={run}>
+        Проверить настройку
+      </Button>
+      {err ? <p className="hint">{err}</p> : null}
+      {report ? (
+        <div className="col" style={{ gap: 6, marginTop: 8 }}>
+          <Line ok={report.botAdmin} label="Бот админ группы" />
+          <Line ok={report.canApprove} label="Может одобрять заявки" />
+          <Line ok={report.joinByRequest} label="Включён приём заявок" />
+          {!report.ok ? (
+            <p className="hint">
+              Проверка не сработает, пока всё выше не ОК. Сделайте бота админом с правом
+              добавлять участников и включите в группе «Заявки на вступление».
+            </p>
+          ) : (
+            <p className="hint">Всё готово. Guard работает.</p>
+          )}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+interface GroupStats {
+  total: number;
+  approve: number;
+  decline: number;
+  queue: number;
+  timeout: number;
+  last7d: number;
+}
+
+function StatsCard({ chatId }: { chatId: string }) {
+  const [stats, setStats] = useState<GroupStats | null>(null);
+  useEffect(() => {
+    api.get<GroupStats>(`/api/owner/groups/${chatId}/stats`).then(setStats).catch(() => undefined);
+  }, [chatId]);
+  if (!stats) return null;
+  return (
+    <Card>
+      <p className="subtitle">Статистика</p>
+      <div className="row">
+        <span className="hint">Всего заявок</span>
+        <span>{stats.total}</span>
+      </div>
+      <div className="row">
+        <span className="hint">За 7 дней</span>
+        <span>{stats.last7d}</span>
+      </div>
+      <div className="row">
+        <span className="hint">Одобрено</span>
+        <span>{stats.approve}</span>
+      </div>
+      <div className="row">
+        <span className="hint">Отклонено</span>
+        <span>{stats.decline}</span>
+      </div>
+      <div className="row">
+        <span className="hint">Очередь</span>
+        <span>{stats.queue}</span>
+      </div>
+      <div className="row">
+        <span className="hint">Таймаут</span>
+        <span>{stats.timeout}</span>
+      </div>
+    </Card>
   );
 }
 

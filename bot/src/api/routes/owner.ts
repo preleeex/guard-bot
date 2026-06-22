@@ -17,9 +17,11 @@ import {
   setGuardEnabled,
   updateSettings,
   setEmojiStatus,
+  checkGroupSetup,
   GroupError,
 } from "../../services/groups";
 import { getScenario, saveScenario } from "../../services/scenarios";
+import { getGroupStats } from "../../services/screening";
 import { listJournal } from "../../services/journal";
 import { getQuota } from "../../services/quota";
 import { checkSubscription } from "../../services/moderation";
@@ -227,6 +229,30 @@ ownerRouter.post("/groups/:chatId/emoji-status", async (req, res) => {
     }
     const group = await setEmojiStatus(chatId, userId, emojiId);
     res.json({ group });
+  } catch (err) {
+    handleGroupError(err, res);
+  }
+});
+
+// Setup self-check: is the bot an admin able to approve, and does the group
+// require join approval? Helps owners diagnose "guard does nothing".
+ownerRouter.get("/groups/:chatId/check", async (req, res) => {
+  try {
+    const chatId = parseChatId(req.params.chatId);
+    const report = await checkGroupSetup(chatId, req.tgUser!.id);
+    res.json(report);
+  } catch (err) {
+    handleGroupError(err, res);
+  }
+});
+
+// Per-group statistics for the owner.
+ownerRouter.get("/groups/:chatId/stats", async (req, res) => {
+  try {
+    const chatId = parseChatId(req.params.chatId);
+    await assertOwnerOf(chatId, req.tgUser!.id);
+    const stats = await getGroupStats(chatId);
+    res.json(stats);
   } catch (err) {
     handleGroupError(err, res);
   }

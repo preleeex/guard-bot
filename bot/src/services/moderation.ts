@@ -1,6 +1,7 @@
 import { prisma } from "../db";
 import { config, requiredChannelUrl } from "../config";
-import { getChatMember, getEmojiStatus } from "../telegram/api";
+import { getChatMember, getEmojiStatus, leaveChat } from "../telegram/api";
+import { markGroupRemoved } from "./groups";
 import { logger } from "../logger";
 
 // --- bans ------------------------------------------------------------------
@@ -20,6 +21,64 @@ export async function banUser(userId: bigint, by: bigint, reason?: string): Prom
 
 export async function unbanUser(userId: bigint): Promise<void> {
   await prisma.bannedUser.deleteMany({ where: { userId } });
+}
+
+// Ban a user and immediately pull the bot out of every group they own. Used by
+// the operator to shut down an abusive owner in one action.
+export async function banUserEverywhere(
+  userId: bigint,
+  by: bigint,
+  reason?: string
+): Promise<{ groupsLeft: number }> {
+  await banUser(userId, by, reason);
+  const groups = await prisma.group.findMany({
+    where: { ownerUserId: userId, removedAt: null },
+    select: { chatId: true },
+  });
+  let groupsLeft = 0;
+  for (const g of groups) {
+    try {
+      await leaveChat(g.chatId);
+      await markGroupRemoved(g.chatId);
+      groupsLeft += 1;
+    } catch (err) {
+      logger.warn("ban: failed to leave group", { chatId: g.chatId.toString(), err: String(err) });
+    }
+  }
+  return { groupsLeft };
+}
+
+// List banned users (most recent first) for the admin panel.
+export async function listBanned(limit = 100) {
+  return prisma.bannedUser.findMany({ orderBy: { createdAt: "desc" }, take: limit });
+}
+
+// --- anti-raid (in-memory sliding window per chat) -------------------------
+
+const RAID_WINDOW_MS = 30_000;
+const RAID_THRESHOLD = 25; // join requests within the window
+const RAID_COOLDOWN_MS = 120_000;
+
+const joinTimes = new Map<string, number[]>();
+const raidUntil = new Map<string, number>();
+
+// Record a join request and report whether the chat is being raided. While a
+// raid is active, callers should queue requests for manual review instead of
+// opening a screening session for each one (which would flood the bot).
+export function recordJoin(chatId: bigint): { raid: boolean; justStarted: boolean } {
+  const key = chatId.toString();
+  const now = Date.now();
+  if (now < (raidUntil.get(key) ?? 0)) return { raid: true, justStarted: false };
+
+  const arr = (joinTimes.get(key) ?? []).filter((t) => now - t < RAID_WINDOW_MS);
+  arr.push(now);
+  if (arr.length >= RAID_THRESHOLD) {
+    raidUntil.set(key, now + RAID_COOLDOWN_MS);
+    joinTimes.delete(key);
+    return { raid: true, justStarted: true };
+  }
+  joinTimes.set(key, arr);
+  return { raid: false, justStarted: false };
 }
 
 // Whether the applicant is still in the post-decline cooldown for this group

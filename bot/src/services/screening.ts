@@ -15,6 +15,7 @@ import {
 import { getScenario } from "./scenarios";
 import { addJournalEntry } from "./journal";
 import { isBanned } from "./moderation";
+import { decide, evaluateBlock } from "./evaluation";
 import type {
   BlockAnswer,
   CaptchaConfig,
@@ -113,6 +114,19 @@ export async function getPublicScenario(sessionId: string, applicantUserId: bigi
     throw new ScreeningError("banned", "Доступ заблокирован.");
   }
 
+  // Voice screening: no in-app blocks. The app shows a prompt plus a button to
+  // record a voice message in the bot DM (works without a pre-existing DM).
+  if (session.mode === "voice") {
+    const group = await prisma.group.findUnique({ where: { chatId: session.chatId } });
+    return {
+      sessionId: session.id,
+      expiresAt: session.expiresAt,
+      blocks: [],
+      voice: true as const,
+      voicePrompt: group?.voicePrompt ?? null,
+    };
+  }
+
   const blocks = await getScenario(session.chatId);
   const challenge = session.challenge as unknown as Record<string, { prompt?: string; code?: string }>;
 
@@ -159,118 +173,8 @@ export async function getPublicScenario(sessionId: string, applicantUserId: bigi
     sessionId: session.id,
     expiresAt: session.expiresAt,
     blocks: publicBlocks,
-  };
-}
-
-// --- evaluation ------------------------------------------------------------
-
-interface BlockResult {
-  blockId: string;
-  type: string;
-  passed: boolean;
-  mandatory: boolean;
-  score?: number; // quiz only, 0..100
-}
-
-function evaluateBlock(
-  block: ScenarioBlockDTO,
-  answer: BlockAnswer | undefined,
-  challenge: Record<string, { expected?: number; code?: string }>
-): BlockResult {
-  switch (block.type) {
-    case "captcha": {
-      const cfg = block.config as CaptchaConfig;
-      const ch = challenge[block.id] ?? {};
-      let passed = false;
-      if (cfg.kind === "math") {
-        passed = Number(answer?.payload?.value) === ch.expected;
-      } else if (cfg.kind === "visual") {
-        passed =
-          String(answer?.payload?.value ?? "").trim().toUpperCase() ===
-          String(ch.code ?? "").toUpperCase();
-      } else {
-        passed = answer?.payload?.pressed === true;
-      }
-      return { blockId: block.id, type: block.type, passed, mandatory: true };
-    }
-    case "quiz": {
-      const cfg = block.config as QuizConfig;
-      const selected = (answer?.payload?.selected ?? {}) as Record<string, number[]>;
-      const questions = cfg.questions ?? [];
-      let correct = 0;
-      for (const q of questions) {
-        const picked = (selected[q.id] ?? []).slice().sort();
-        const truth = (q.correct ?? []).slice().sort();
-        if (
-          picked.length === truth.length &&
-          picked.every((v, i) => v === truth[i])
-        ) {
-          correct += 1;
-        }
-      }
-      const score = questions.length === 0 ? 100 : Math.round((correct / questions.length) * 100);
-      const need = cfg.passCount ?? questions.length;
-      return {
-        blockId: block.id,
-        type: block.type,
-        passed: correct >= need,
-        mandatory: true,
-        score,
-      };
-    }
-    case "rules": {
-      return {
-        blockId: block.id,
-        type: block.type,
-        passed: answer?.payload?.agreed === true,
-        mandatory: true,
-      };
-    }
-    case "media":
-      // Display-only block: never blocks the applicant.
-      return { blockId: block.id, type: block.type, passed: true, mandatory: false };
-    default:
-      // Unknown block type: do not block the applicant, but record it.
-      logger.warn("unknown block type during evaluation", { type: block.type });
-      return { blockId: block.id, type: block.type, passed: true, mandatory: false };
-  }
-}
-
-function decide(
-  results: BlockResult[],
-  policy: ResultPolicy
-): { decision: Decision; score: number; reason: string } {
-  const mandatoryFailed = results.some((r) => r.mandatory && !r.passed);
-  const quizScores = results.filter((r) => typeof r.score === "number").map((r) => r.score!);
-  const score = quizScores.length
-    ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScores.length)
-    : mandatoryFailed
-    ? 0
-    : 100;
-
-  if (mandatoryFailed) {
-    return {
-      decision: policy.failDecline ? "decline" : "queue",
-      score,
-      reason: "Не пройден обязательный блок.",
-    };
-  }
-
-  if (policy.queueThreshold != null) {
-    if (score >= policy.queueThreshold) {
-      return {
-        decision: policy.passApprove ? "approve" : "queue",
-        score,
-        reason: `Результат ${score}, порог ${policy.queueThreshold}.`,
-      };
-    }
-    return { decision: "queue", score, reason: `Результат ${score} ниже порога ${policy.queueThreshold}.` };
-  }
-
-  return {
-    decision: policy.passApprove ? "approve" : "queue",
-    score,
-    reason: "Сценарий пройден.",
+    voice: false as const,
+    voicePrompt: null,
   };
 }
 
@@ -503,6 +407,55 @@ async function notifyOwnerDecision(params: {
     text: lines.join("\n"),
     reply_markup,
   });
+}
+
+// --- maintenance -----------------------------------------------------------
+
+// Delete finished sessions and old journal entries so the database does not
+// grow without bound. Pending sessions are never touched here.
+export async function purgeOldData(opts?: {
+  sessionDays?: number;
+  journalDays?: number;
+}): Promise<{ sessions: number; journal: number }> {
+  const sessionDays = opts?.sessionDays ?? 7;
+  const journalDays = opts?.journalDays ?? 90;
+  const sessionCutoff = new Date(Date.now() - sessionDays * 86_400_000);
+  const journalCutoff = new Date(Date.now() - journalDays * 86_400_000);
+
+  const sessions = await prisma.screeningSession.deleteMany({
+    where: { status: { in: ["completed", "expired"] }, createdAt: { lt: sessionCutoff } },
+  });
+  const journal = await prisma.journalEntry.deleteMany({
+    where: { finishedAt: { lt: journalCutoff } },
+  });
+  return { sessions: sessions.count, journal: journal.count };
+}
+
+// --- per-group statistics (owner-facing) -----------------------------------
+
+export async function getGroupStats(chatId: bigint): Promise<{
+  total: number;
+  approve: number;
+  decline: number;
+  queue: number;
+  timeout: number;
+  last7d: number;
+}> {
+  const rows = await prisma.journalEntry.groupBy({
+    by: ["decision"],
+    where: { chatId },
+    _count: { _all: true },
+  });
+  const counts: Record<string, number> = {};
+  for (const r of rows) counts[r.decision] = r._count._all;
+  const last7d = await prisma.journalEntry.count({
+    where: { chatId, finishedAt: { gt: new Date(Date.now() - 7 * 86_400_000) } },
+  });
+  const approve = counts.approve ?? 0;
+  const decline = counts.decline ?? 0;
+  const queue = counts.queue ?? 0;
+  const timeout = counts.timeout ?? 0;
+  return { total: approve + decline + queue + timeout, approve, decline, queue, timeout, last7d };
 }
 
 export class ScreeningError extends Error {

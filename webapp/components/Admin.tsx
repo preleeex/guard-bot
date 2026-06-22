@@ -15,6 +15,12 @@ interface Stats {
   revenueByCurrency: Record<string, number>;
 }
 
+interface Banned {
+  userId: string;
+  reason: string | null;
+  createdAt: string;
+}
+
 // Operator-only admin content, rendered inside the bottom-nav "Админ" tab.
 export function AdminPanel() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -22,9 +28,17 @@ export function AdminPanel() {
   const [slots, setSlots] = useState("3");
   const [status, setStatus] = useState("");
 
+  const [banId, setBanId] = useState("");
+  const [banReason, setBanReason] = useState("");
+  const [banStatus, setBanStatus] = useState("");
+  const [banned, setBanned] = useState<Banned[]>([]);
+
   const load = () => api.get<Stats>("/api/admin/stats").then(setStats);
+  const loadBanned = () =>
+    api.get<{ banned: Banned[] }>("/api/admin/banned").then((r) => setBanned(r.banned));
   useEffect(() => {
     load();
+    loadBanned();
   }, []);
 
   const grant = async () => {
@@ -36,6 +50,33 @@ export function AdminPanel() {
       load();
     } catch (e) {
       setStatus((e as ApiError).message || "Ошибка.");
+    }
+  };
+
+  const ban = async () => {
+    setBanStatus("");
+    try {
+      const r = await api.post<{ groupsLeft: number }>("/api/admin/ban", {
+        userId: banId,
+        reason: banReason,
+      });
+      setBanStatus(
+        r.groupsLeft > 0 ? `Забанен. Бот вышел из групп: ${r.groupsLeft}.` : "Забанен."
+      );
+      setBanId("");
+      setBanReason("");
+      loadBanned();
+    } catch (e) {
+      setBanStatus((e as ApiError).message || "Ошибка.");
+    }
+  };
+
+  const unban = async (id: string) => {
+    try {
+      await api.post("/api/admin/unban", { userId: id });
+      loadBanned();
+    } catch (e) {
+      setBanStatus((e as ApiError).message || "Ошибка.");
     }
   };
 
@@ -109,6 +150,47 @@ export function AdminPanel() {
           Выдать
         </Button>
         {status ? <p className="hint center">{status}</p> : null}
+      </Card>
+
+      <Card>
+        <p className="subtitle center">Бан пользователя</p>
+        <p className="hint center">Бот сразу выйдет из всех групп этого пользователя.</p>
+        <input
+          className="field center"
+          inputMode="numeric"
+          placeholder="user_id"
+          value={banId}
+          onChange={(e) => setBanId(e.target.value)}
+        />
+        <input
+          className="field center"
+          placeholder="Причина (необязательно)"
+          value={banReason}
+          onChange={(e) => setBanReason(e.target.value)}
+        />
+        <Button variant="danger" disabled={!banId} onClick={ban}>
+          Забанить
+        </Button>
+        {banStatus ? <p className="hint center">{banStatus}</p> : null}
+      </Card>
+
+      <Card>
+        <p className="subtitle center">Забаненные</p>
+        {banned.length === 0 ? (
+          <p className="hint center">Список пуст</p>
+        ) : (
+          banned.map((b) => (
+            <div className="row" key={b.userId}>
+              <span className="hint">
+                {b.userId}
+                {b.reason ? ` · ${b.reason}` : ""}
+              </span>
+              <Button variant="secondary" onClick={() => unban(b.userId)}>
+                Разбанить
+              </Button>
+            </div>
+          ))
+        )}
       </Card>
     </>
   );

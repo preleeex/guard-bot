@@ -3,7 +3,7 @@ import { logger } from "./logger";
 import { prisma } from "./db";
 import { bot } from "./telegram/bot";
 import { buildApp } from "./api/server";
-import { startTimeoutJob } from "./jobs/timeout";
+import { startTimeoutJob, startCleanupJob } from "./jobs/timeout";
 import { getMe } from "./telegram/api";
 
 async function main() {
@@ -23,6 +23,7 @@ async function main() {
   });
 
   startTimeoutJob();
+  startCleanupJob();
 
   const shutdown = async (signal: string) => {
     logger.info("shutting down", { signal });
