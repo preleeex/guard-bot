@@ -6,7 +6,7 @@ import { sendSystemLog } from "./systemLog";
 import { tryCallApi } from "./api";
 import { createScreeningSession, screeningUrl } from "../services/screening";
 import { markGroupRemoved, connectGroup } from "../services/groups";
-import { isBanned, banUser, unbanUser } from "../services/moderation";
+import { isBanned, banUser, unbanUser, checkSubscription } from "../services/moderation";
 
 export const bot = new Bot(config.botToken);
 
@@ -52,11 +52,35 @@ bot.command("start", async (ctx) => {
     return;
   }
 
+  // Panel entry requires a subscription to the operator's channel.
+  const sub = await checkSubscription(userId);
+  if (sub.required && !sub.subscribed) {
+    const kb = new InlineKeyboard()
+      .url(`Подписаться${sub.username ? " @" + sub.username : ""}`, sub.url ?? "https://t.me")
+      .row()
+      .text("Проверить", "checksub");
+    await ctx.reply("Подпишись на канал, затем нажми Проверить.", { reply_markup: kb });
+    return;
+  }
+
   const keyboard = new InlineKeyboard().webApp(
     "Открыть панель",
     `${config.miniAppUrl}/?mode=owner`
   );
   await ctx.reply("Панель управления группами.", { reply_markup: keyboard });
+});
+
+// Re-check subscription from the "Проверить" button.
+bot.callbackQuery("checksub", async (ctx) => {
+  if (!ctx.from) return;
+  const sub = await checkSubscription(BigInt(ctx.from.id));
+  if (sub.required && !sub.subscribed) {
+    await ctx.answerCallbackQuery({ text: "Ещё не подписан" });
+    return;
+  }
+  await ctx.answerCallbackQuery({ text: "Готово" });
+  const keyboard = new InlineKeyboard().webApp("Открыть панель", `${config.miniAppUrl}/?mode=owner`);
+  await ctx.editMessageText("Панель управления группами.", { reply_markup: keyboard });
 });
 
 // Utility: reply with the current chat id. Use it in the log group to learn the

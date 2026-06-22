@@ -1,4 +1,6 @@
 import express, { type Request, type Response, type NextFunction } from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import type { Update } from "grammy/types";
 import { config } from "../config";
 import { logger } from "../logger";
@@ -27,15 +29,29 @@ function cors(req: Request, res: Response, next: NextFunction): void {
 export function buildApp() {
   const app = express();
 
-  // Capture the raw body for webhook signature verification.
+  // Behind the DigitalOcean proxy: trust it so rate limiting sees real client IPs.
+  app.set("trust proxy", 1);
+
+  // Security headers. CSP/CORP are disabled because this is a JSON API + webhook
+  // backend (no HTML), and cross-origin access is governed by our own CORS.
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
+
+  // Cap request body size to blunt large-payload abuse.
   app.use(
     express.json({
+      limit: "256kb",
       verify: (req, _res, buf) => {
         (req as unknown as { rawBody?: string }).rawBody = buf.toString("utf8");
       },
     })
   );
   app.use(cors);
+
+  // Rate limiting. Generous for the Mini App API; the Telegram webhook is not
+  // limited (it is authenticated by the secret token and acked instantly).
+  const apiLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
+  app.use("/api", apiLimiter);
+  app.use("/crypto/webhook", rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false }));
 
   app.get("/healthz", (_req, res) => res.json({ ok: true }));
 

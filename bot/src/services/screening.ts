@@ -13,7 +13,7 @@ import {
 } from "../telegram/api";
 import { getScenario } from "./scenarios";
 import { addJournalEntry } from "./journal";
-import { isBanned, checkSubscription } from "./moderation";
+import { isBanned } from "./moderation";
 import type {
   BlockAnswer,
   CaptchaConfig,
@@ -97,7 +97,6 @@ export async function getPublicScenario(sessionId: string, applicantUserId: bigi
     throw new ScreeningError("banned", "Доступ заблокирован.");
   }
 
-  const subscription = await checkSubscription(applicantUserId);
   const blocks = await getScenario(session.chatId);
   const challenge = session.challenge as unknown as Record<string, { prompt?: string; code?: string }>;
 
@@ -140,7 +139,6 @@ export async function getPublicScenario(sessionId: string, applicantUserId: bigi
     sessionId: session.id,
     expiresAt: session.expiresAt,
     blocks: publicBlocks,
-    subscription,
   };
 }
 
@@ -331,12 +329,6 @@ export async function submitScreening(
       startedAt: session.createdAt,
     });
     return { decision: "decline", score: 0, reason: "Заблокирован." };
-  }
-
-  // Mandatory channel subscription must be satisfied before approval.
-  const subscription = await checkSubscription(applicantUserId);
-  if (subscription.required && !subscription.subscribed) {
-    throw new ScreeningError("not_subscribed", "Нужна подписка на канал.");
   }
 
   const blocks = await getScenario(session.chatId);

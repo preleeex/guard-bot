@@ -13,6 +13,7 @@ import {
 import { getScenario, saveScenario } from "../../services/scenarios";
 import { listJournal } from "../../services/journal";
 import { getQuota } from "../../services/quota";
+import { checkSubscription } from "../../services/moderation";
 
 export const ownerRouter = Router();
 ownerRouter.use(requireInitData);
@@ -33,9 +34,14 @@ ownerRouter.get("/me", (req, res) => {
 // Combining these into one request keeps the initial load fast.
 ownerRouter.get("/home", async (req, res) => {
   const userId = req.tgUser!.id;
-  const [quota, groups] = await Promise.all([getQuota(userId), listGroups(userId)]);
+  const [quota, groups, subscription] = await Promise.all([
+    getQuota(userId),
+    listGroups(userId),
+    checkSubscription(userId),
+  ]);
   res.json({
     isOperator: req.isOwnerOperator === true,
+    subscription,
     quota: {
       ...quota,
       totalSlots: quota.unlimited ? null : quota.totalSlots,

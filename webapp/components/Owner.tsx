@@ -14,10 +14,37 @@ import { AdminPanel } from "./Admin";
 type View = { name: "home" } | { name: "group"; chatId: string };
 type Tab = "groups" | "billing" | "admin";
 
+interface Subscription {
+  required: boolean;
+  subscribed: boolean;
+  username?: string;
+  url?: string;
+}
+
 interface HomeData {
   isOperator: boolean;
+  subscription?: Subscription;
   quota: QuotaStatus;
   groups: Group[];
+}
+
+function SubscriptionGate({ sub, onCheck }: { sub: Subscription; onCheck: () => void }) {
+  return (
+    <div className="app">
+      <Card>
+        <p className="title center">Подпишись на канал</p>
+        <p className="hint center">
+          Чтобы пользоваться панелью, подпишись на канал и нажми «Проверить».
+        </p>
+        <Button onClick={() => sub.url && openExternal(sub.url)}>
+          Открыть канал{sub.username ? ` @${sub.username}` : ""}
+        </Button>
+        <Button variant="secondary" onClick={onCheck}>
+          Проверить
+        </Button>
+      </Card>
+    </div>
+  );
 }
 
 export function OwnerApp() {
@@ -70,6 +97,19 @@ export function OwnerApp() {
         }}
       />
     );
+
+  // Owner panel requires a subscription to the operator's channel.
+  if (data && data.subscription?.required && !data.subscription.subscribed) {
+    return (
+      <SubscriptionGate
+        sub={data.subscription}
+        onCheck={() => {
+          setLoading(true);
+          load();
+        }}
+      />
+    );
+  }
 
   if (view.name === "group") {
     return (
