@@ -19,6 +19,7 @@ export interface QuizQuestion {
   imageSize?: ImageSize; // display size of the question image
   options: string[];
   optionImages?: (string | null)[]; // data URL per option (aligned by index)
+  optionImageSize?: ImageSize; // display size of option images (whole question)
   correct?: number[]; // present only in the owner builder, never to applicants
 }
 

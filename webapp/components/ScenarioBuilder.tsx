@@ -282,11 +282,22 @@ function QuizEditor({
                 </div>
                 {optImg ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img className="thumb" src={optImg} alt="" />
+                  <img className={`opt-img opt-img-${q.optionImageSize ?? "s"}`} src={optImg} alt="" />
                 ) : null}
               </div>
             );
           })}
+          {(q.optionImages ?? []).some(Boolean) ? (
+            <select
+              className="field"
+              value={q.optionImageSize ?? "s"}
+              onChange={(e) => updateQ(qi, { optionImageSize: e.target.value as "s" | "m" | "l" })}
+            >
+              <option value="s">Фото вариантов: маленькое</option>
+              <option value="m">Фото вариантов: среднее</option>
+              <option value="l">Фото вариантов: большое</option>
+            </select>
+          ) : null}
           <Button
             small
             variant="secondary"

@@ -47,8 +47,10 @@ export function buildPreview(draft: ScenarioBlock[]): {
             id: q.id,
             text: q.text,
             image: q.image,
+            imageSize: q.imageSize,
             options: q.options,
             optionImages: q.optionImages,
+            optionImageSize: q.optionImageSize,
           })),
         },
       };

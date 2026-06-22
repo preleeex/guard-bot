@@ -23,6 +23,7 @@ export interface QuizQuestion {
   imageSize?: "s" | "m" | "l"; // display size of the question image
   options: string[];
   optionImages?: (string | null)[]; // data URL per option
+  optionImageSize?: "s" | "m" | "l"; // display size of option images
   // indexes of correct options (single or multiple correct)
   correct: number[];
 }

@@ -78,15 +78,17 @@ export function BlockForm({
             {q.options.map((opt, idx) => {
               const isSel = (selected[q.id] ?? []).includes(idx);
               const optImg = (q.optionImages ?? [])[idx];
+              const optSize = q.optionImageSize ?? "s";
+              const big = Boolean(optImg) && optSize !== "s";
               return (
                 <div
                   key={idx}
-                  className={`option ${isSel ? "selected" : ""}`}
+                  className={`option ${isSel ? "selected" : ""} ${big ? "option-col" : ""}`}
                   onClick={() => toggle(q.id, idx)}
                 >
                   {optImg ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img className="opt-img" src={optImg} alt="" />
+                    <img className={`opt-img opt-img-${optSize}`} src={optImg} alt="" />
                   ) : null}
                   <span>{opt}</span>
                 </div>

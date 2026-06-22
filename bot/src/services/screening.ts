@@ -132,6 +132,7 @@ export async function getPublicScenario(sessionId: string, applicantUserId: bigi
             imageSize: q.imageSize,
             options: q.options,
             optionImages: q.optionImages,
+            optionImageSize: q.optionImageSize,
           })),
         },
       };
