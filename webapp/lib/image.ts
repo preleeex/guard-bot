@@ -26,20 +26,36 @@ export function resizeImage(file: File, maxWidth = 600, quality = 0.7): Promise<
 }
 
 // Hidden-input helper: opens the file picker and resolves with a data URL.
+// The input is attached to the DOM before clicking — iOS / Telegram webviews
+// ignore clicks on a detached input, which silently breaks the picker.
 export function pickImage(maxWidth = 600): Promise<string | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+    input.style.opacity = "0";
+    document.body.appendChild(input);
+
+    let settled = false;
+    const finish = (v: string | null) => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(v);
+    };
+
     input.onchange = async () => {
       const file = input.files?.[0];
-      if (!file) return resolve(null);
+      if (!file) return finish(null);
       try {
-        resolve(await resizeImage(file, maxWidth));
+        finish(await resizeImage(file, maxWidth));
       } catch {
-        resolve(null);
+        finish(null);
       }
     };
+
     input.click();
   });
 }
