@@ -312,29 +312,31 @@ function Home({
       {tab === "billing" ? (
         <>
           <Card>
-            <SectionHeader icon={<CoinIcon />} title="Квота" />
+            <SectionHeader icon={<CoinIcon />} title="Ваш тариф" />
             <p className="big-number center">
-              {quota.usedGroups}
-              {quota.unlimited ? "" : ` / ${quota.totalSlots}`}
+              {quota.unlimited ? "Безлимит" : `${quota.usedGroups} / ${quota.totalSlots}`}
             </p>
-            {quota.unlimited ? (
-              <p className="center">
-                <span className="pill">Безлимит</span>
-              </p>
-            ) : null}
           </Card>
 
           {!quota.unlimited ? (
             <Card>
-              <p className="subtitle center">Поддержать и получить больше</p>
+              <SectionHeader icon={<CoinIcon />} title="Поменять план" />
               {[
-                { key: "small", title: "+5 групп", perk: "Больше групп для проверок", price: "2.99$" },
-                { key: "big", title: "+15 групп", perk: "Выгоднее для актива", price: "6.99$" },
-                { key: "unlimited", title: "Безлимит", perk: "Все группы без лимита", price: "14.99$" },
+                { key: "small", title: "+5 групп", perk: "Старт", price: "2.99$", best: false },
+                { key: "big", title: "+15 групп", perk: "Выгодно", price: "6.99$", best: true },
+                { key: "unlimited", title: "Безлимит", perk: "Без ограничений", price: "14.99$", best: false },
               ].map((p) => (
-                <button key={p.key} className="plan" disabled={buying} onClick={() => buyPlan(p.key)}>
+                <button
+                  key={p.key}
+                  className={`plan ${p.best ? "best" : ""}`}
+                  disabled={buying}
+                  onClick={() => buyPlan(p.key)}
+                >
                   <span className="plan-info">
-                    <span className="plan-title">{p.title}</span>
+                    <span className="plan-title">
+                      {p.title}
+                      {p.best ? <span className="plan-badge">хит</span> : null}
+                    </span>
                     <span className="hint">{p.perk}</span>
                   </span>
                   <span className="plan-price">{p.price}</span>
@@ -397,7 +399,7 @@ function Home({
         </button>
         <button className={tab === "billing" ? "active" : ""} onClick={() => setTab("billing")}>
           <CoinIcon size={22} />
-          <span>Оплата</span>
+          <span>Тариф</span>
         </button>
         <button className={tab === "help" ? "active" : ""} onClick={() => setTab("help")}>
           <HelpIcon size={22} />

@@ -137,6 +137,14 @@ export function HelpIcon({ size = 20, ...rest }: IconProps) {
   );
 }
 
+export function CheckIcon({ size = 20, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, rest)}>
+      <path d="M5 12l5 5L20 6" />
+    </svg>
+  );
+}
+
 export function UploadIcon({ size = 20, ...rest }: IconProps) {
   return (
     <svg {...base(size, rest)}>

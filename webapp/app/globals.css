@@ -335,6 +335,23 @@ textarea.field {
   white-space: nowrap;
 }
 
+.plan.best {
+  border-color: var(--tg-button);
+  border-width: 2px;
+}
+
+.plan-badge {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--tg-button-text);
+  background: var(--tg-button);
+  border-radius: 999px;
+  padding: 2px 8px;
+  vertical-align: middle;
+}
+
 /* Tappable row in a list (e.g. a group) */
 .list-item {
   appearance: none;
@@ -619,6 +636,26 @@ textarea.field {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.check-box {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 2px solid var(--tg-hint);
+  background: transparent;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.check-box.on {
+  background: var(--tg-button);
+  border-color: var(--tg-button);
 }
 
 .journal-head {

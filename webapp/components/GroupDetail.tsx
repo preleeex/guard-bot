@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { openExternal, getInitData } from "@/lib/telegram";
 import { t, tDyn } from "@/lib/i18n";
-import type { Group, JournalEntry, ResultPolicy, ScenarioBlock } from "@/lib/types";
+import type { Group, JournalEntry, QuizConfig, ResultPolicy, ScenarioBlock } from "@/lib/types";
 import { Avatar, Button, Card, Loading, Toggle, InfoTip } from "./ui";
-import { ExternalIcon } from "./icons";
+import { ExternalIcon, ArrowDownIcon, ArrowUpIcon } from "./icons";
 import { ScenarioBuilder } from "./ScenarioBuilder";
 import { Preview } from "./Preview";
 
@@ -59,6 +59,16 @@ export function GroupDetail({
     setGroup({ ...group, resultPolicy: { ...policy, ...p } });
 
   const saveScenario = async () => {
+    // Every quiz question must have at least one correct answer.
+    const quizBad = blocks.some(
+      (b) =>
+        b.type === "quiz" &&
+        ((b.config as QuizConfig).questions ?? []).some((q) => !(q.correct && q.correct.length > 0))
+    );
+    if (quizBad) {
+      setStatus(t("quiz_no_correct"));
+      return;
+    }
     setSaving(true);
     setStatus("");
     try {
@@ -207,6 +217,7 @@ function SetupCheck({ chatId }: { chatId: string }) {
   const [report, setReport] = useState<SetupReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [open, setOpen] = useState(false);
 
   const run = async () => {
     setBusy(true);
@@ -222,26 +233,33 @@ function SetupCheck({ chatId }: { chatId: string }) {
 
   return (
     <Card>
-      <p className="subtitle">{t("checklist_title")}</p>
-      <Button small variant="secondary" disabled={busy} onClick={run}>
-        {t("check_run")}
-      </Button>
-      {err ? <p className="hint">{err}</p> : null}
-      {report ? (
-        <div className="col" style={{ gap: 8, marginTop: 8 }}>
-          {report.items.map((it) => (
-            <div className="col" key={it.key} style={{ gap: 2 }}>
-              <div className="row">
-                <span className="hint">{tDyn(`check_${it.key}`)}</span>
-                <span className={`pill ${it.ok ? "approve" : "decline"}`}>
-                  {it.ok ? t("check_ok") : t("check_bad")}
-                </span>
-              </div>
-              {!it.ok ? <p className="hint">{tDyn(`fix_${it.key}`)}</p> : null}
+      <button className="journal-head" onClick={() => setOpen((v) => !v)}>
+        <span className="list-item-title">{t("checklist_title")}</span>
+        {open ? <ArrowUpIcon size={18} /> : <ArrowDownIcon size={18} />}
+      </button>
+      {open ? (
+        <>
+          <Button small variant="secondary" disabled={busy} onClick={run}>
+            {t("check_run")}
+          </Button>
+          {err ? <p className="hint">{err}</p> : null}
+          {report ? (
+            <div className="col" style={{ gap: 8, marginTop: 8 }}>
+              {report.items.map((it) => (
+                <div className="col" key={it.key} style={{ gap: 2 }}>
+                  <div className="row">
+                    <span className="hint">{tDyn(`check_${it.key}`)}</span>
+                    <span className={`pill ${it.ok ? "approve" : "decline"}`}>
+                      {it.ok ? t("check_ok") : t("check_bad")}
+                    </span>
+                  </div>
+                  {!it.ok ? <p className="hint">{tDyn(`fix_${it.key}`)}</p> : null}
+                </div>
+              ))}
+              {report.ok ? <p className="hint">{t("check_all_ok")}</p> : null}
             </div>
-          ))}
-          {report.ok ? <p className="hint">{t("check_all_ok")}</p> : null}
-        </div>
+          ) : null}
+        </>
       ) : null}
     </Card>
   );

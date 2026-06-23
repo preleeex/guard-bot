@@ -11,7 +11,16 @@ import type {
   ScenarioBlock,
 } from "@/lib/types";
 import { Button, IconButton } from "./ui";
-import { ArrowUpIcon, ArrowDownIcon, TrashIcon, ShieldIcon, QuizIcon, JournalIcon, UploadIcon } from "./icons";
+import {
+  ArrowUpIcon,
+  ArrowDownIcon,
+  TrashIcon,
+  ShieldIcon,
+  QuizIcon,
+  JournalIcon,
+  UploadIcon,
+  CheckIcon,
+} from "./icons";
 import { pickImage } from "@/lib/image";
 import { t } from "@/lib/i18n";
 
@@ -22,27 +31,23 @@ function blockIcon(type: string) {
   return null;
 }
 
+function blockLabel(type: string): string {
+  if (type === "captcha") return t("b_captcha");
+  if (type === "quiz") return t("b_quiz");
+  if (type === "rules") return t("b_rules");
+  return type;
+}
+
 function uid(): string {
   return Math.random().toString(36).slice(2, 10);
 }
-
-const BLOCK_LABELS: Record<string, string> = {
-  captcha: "Капча",
-  quiz: "Квиз",
-  rules: "Правила",
-  media: "Медиа",
-};
 
 function newBlock(type: string): ScenarioBlock {
   if (type === "captcha") {
     return { id: uid(), type, config: { kind: "math" } as CaptchaConfig };
   }
   if (type === "quiz") {
-    return {
-      id: uid(),
-      type,
-      config: { passCount: 1, questions: [] } as QuizConfig,
-    };
+    return { id: uid(), type, config: { passCount: 1, questions: [] } as QuizConfig };
   }
   if (type === "media") {
     return { id: uid(), type, config: { kind: "image", url: "" } as MediaConfig };
@@ -50,51 +55,8 @@ function newBlock(type: string): ScenarioBlock {
   return { id: uid(), type: "rules", config: { text: "" } as RulesConfig };
 }
 
-// Quick-start presets. Each returns a fresh set of blocks.
-const TEMPLATES: { key: "tpl_simple" | "tpl_captcha_rules" | "tpl_quiz3" | "tpl_max"; build: () => ScenarioBlock[] }[] = [
-  {
-    key: "tpl_simple",
-    build: () => [{ id: uid(), type: "captcha", config: { kind: "math" } as CaptchaConfig }],
-  },
-  {
-    key: "tpl_captcha_rules",
-    build: () => [
-      { id: uid(), type: "captcha", config: { kind: "math" } as CaptchaConfig },
-      { id: uid(), type: "rules", config: { text: "" } as RulesConfig },
-    ],
-  },
-  {
-    key: "tpl_quiz3",
-    build: () => [
-      {
-        id: uid(),
-        type: "quiz",
-        config: {
-          passCount: 2,
-          questions: [1, 2, 3].map(() => ({ id: uid(), text: "", options: ["", ""], correct: [] })),
-        } as QuizConfig,
-      },
-    ],
-  },
-  {
-    key: "tpl_max",
-    build: () => [
-      { id: uid(), type: "captcha", config: { kind: "visual" } as CaptchaConfig },
-      { id: uid(), type: "rules", config: { text: "" } as RulesConfig },
-      {
-        id: uid(),
-        type: "quiz",
-        config: {
-          passCount: 1,
-          questions: [{ id: uid(), text: "", options: ["", ""], correct: [] }],
-        } as QuizConfig,
-      },
-    ],
-  },
-];
-
 // The no-code scenario constructor. Add, edit, reorder and delete blocks of any
-// type and in any number. New block types only need a new editor branch here.
+// type and in any number.
 export function ScenarioBuilder({
   blocks,
   onChange,
@@ -115,53 +77,34 @@ export function ScenarioBuilder({
     onChange(next);
   };
 
-  const applyTemplate = (build: () => ScenarioBlock[]) => {
-    if (blocks.length > 0 && !window.confirm(t("tpl_replace_confirm"))) return;
-    onChange(build());
-  };
-
   return (
     <div className="col">
-      <div className="card">
-        <p className="subtitle">{t("templates_title")}</p>
-        <div className="add-block-grid">
-          {TEMPLATES.map((tpl) => (
-            <button key={tpl.key} className="add-block" onClick={() => applyTemplate(tpl.build)}>
-              <span>{t(tpl.key)}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {blocks.map((block, idx) => (
         <div className="card" key={block.id}>
           <div className="row">
             <p className="subtitle icon-row">
               <span className="block-ico">{blockIcon(block.type)}</span>
-              {idx + 1}. {BLOCK_LABELS[block.type] ?? block.type}
+              {idx + 1}. {blockLabel(block.type)}
             </p>
             <div style={{ display: "flex", gap: 8 }}>
-              <IconButton onClick={() => move(idx, -1)} disabled={idx === 0} aria-label="Вверх">
+              <IconButton onClick={() => move(idx, -1)} disabled={idx === 0} aria-label={t("aria_up")}>
                 <ArrowUpIcon size={18} />
               </IconButton>
               <IconButton
                 onClick={() => move(idx, 1)}
                 disabled={idx === blocks.length - 1}
-                aria-label="Вниз"
+                aria-label={t("aria_down")}
               >
                 <ArrowDownIcon size={18} />
               </IconButton>
-              <IconButton variant="danger" onClick={() => remove(idx)} aria-label="Удалить">
+              <IconButton variant="danger" onClick={() => remove(idx)} aria-label={t("aria_delete")}>
                 <TrashIcon size={18} />
               </IconButton>
             </div>
           </div>
 
           {block.type === "captcha" ? (
-            <CaptchaEditor
-              config={block.config as CaptchaConfig}
-              onChange={(c) => setConfig(idx, c)}
-            />
+            <CaptchaEditor config={block.config as CaptchaConfig} onChange={(c) => setConfig(idx, c)} />
           ) : null}
           {block.type === "quiz" ? (
             <QuizEditor config={block.config as QuizConfig} onChange={(c) => setConfig(idx, c)} />
@@ -178,15 +121,15 @@ export function ScenarioBuilder({
       <div className="add-block-grid">
         <button className="add-block" onClick={() => onChange([...blocks, newBlock("captcha")])}>
           <ShieldIcon size={24} />
-          <span>Капча</span>
+          <span>{t("b_captcha")}</span>
         </button>
         <button className="add-block" onClick={() => onChange([...blocks, newBlock("quiz")])}>
           <QuizIcon size={24} />
-          <span>Квиз</span>
+          <span>{t("b_quiz")}</span>
         </button>
         <button className="add-block" onClick={() => onChange([...blocks, newBlock("rules")])}>
           <JournalIcon size={24} />
-          <span>Правила</span>
+          <span>{t("b_rules")}</span>
         </button>
       </div>
     </div>
@@ -202,20 +145,20 @@ function CaptchaEditor({
 }) {
   return (
     <div className="col">
-      <label className="hint">Тип капчи</label>
+      <label className="hint">{t("cap_type")}</label>
       <select
         className="field"
         value={config.kind}
         onChange={(e) => onChange({ ...config, kind: e.target.value as CaptchaKind })}
       >
-        <option value="math">Математическая</option>
-        <option value="visual">Визуальная (код)</option>
-        <option value="button">Кнопочная</option>
+        <option value="math">{t("cap_math")}</option>
+        <option value="visual">{t("cap_visual")}</option>
+        <option value="button">{t("cap_button")}</option>
       </select>
       {config.kind === "button" ? (
         <input
           className="field"
-          placeholder="Текст кнопки (по умолчанию: Я не робот)"
+          placeholder={t("cap_btn_ph")}
           value={config.buttonLabel ?? ""}
           onChange={(e) => onChange({ ...config, buttonLabel: e.target.value })}
         />
@@ -244,7 +187,7 @@ function QuizEditor({
 
   return (
     <div className="col">
-      <label className="hint">Сколько верных нужно</label>
+      <label className="hint">{t("quiz_need")}</label>
       <input
         className="field"
         inputMode="numeric"
@@ -260,7 +203,7 @@ function QuizEditor({
         <div className="card" key={q.id}>
           <input
             className="field"
-            placeholder="Текст вопроса"
+            placeholder={t("quiz_qtext_ph")}
             value={q.text}
             onChange={(e) => updateQ(qi, { text: e.target.value })}
           />
@@ -274,11 +217,11 @@ function QuizEditor({
                   value={q.imageSize ?? "l"}
                   onChange={(e) => updateQ(qi, { imageSize: e.target.value as "s" | "m" | "l" })}
                 >
-                  <option value="s">Размер: маленькое</option>
-                  <option value="m">Размер: среднее</option>
-                  <option value="l">Размер: большое</option>
+                  <option value="s">{t("img_s")}</option>
+                  <option value="m">{t("img_m")}</option>
+                  <option value="l">{t("img_l")}</option>
                 </select>
-                <IconButton variant="danger" onClick={() => updateQ(qi, { image: undefined })} aria-label="Убрать">
+                <IconButton variant="danger" onClick={() => updateQ(qi, { image: undefined })} aria-label={t("remove")}>
                   <TrashIcon size={18} />
                 </IconButton>
               </div>
@@ -293,7 +236,7 @@ function QuizEditor({
               }}
             >
               <span className="btn-icon">
-                <UploadIcon size={18} /> Фото вопроса
+                <UploadIcon size={18} /> {t("quiz_photo_q")}
               </span>
             </Button>
           )}
@@ -305,7 +248,7 @@ function QuizEditor({
               <div className="opt-item" key={oi}>
                 <input
                   className="field"
-                  placeholder={`Вариант ${oi + 1}`}
+                  placeholder={`${t("quiz_option")} ${oi + 1}`}
                   value={opt}
                   onChange={(e) =>
                     updateQ(qi, {
@@ -314,8 +257,21 @@ function QuizEditor({
                   }
                 />
                 <div className="opt-controls">
+                  <button
+                    type="button"
+                    className={`check-box ${isCorrect ? "on" : ""}`}
+                    aria-label={t("quiz_correct")}
+                    onClick={() =>
+                      updateQ(qi, {
+                        correct: isCorrect ? correct.filter((c) => c !== oi) : [...correct, oi],
+                      })
+                    }
+                  >
+                    {isCorrect ? <CheckIcon size={16} /> : null}
+                  </button>
+                  <span className="hint">{t("quiz_correct")}</span>
                   <IconButton
-                    aria-label="Фото варианта"
+                    aria-label={t("quiz_photo_q")}
                     onClick={async () => {
                       const url = await pickImage();
                       if (url) setOptImage(qi, oi, url);
@@ -323,19 +279,8 @@ function QuizEditor({
                   >
                     <UploadIcon size={18} />
                   </IconButton>
-                  <Button
-                    small
-                    variant={isCorrect ? "primary" : "secondary"}
-                    onClick={() =>
-                      updateQ(qi, {
-                        correct: isCorrect ? correct.filter((c) => c !== oi) : [...correct, oi],
-                      })
-                    }
-                  >
-                    {isCorrect ? "Верный" : "Неверный"}
-                  </Button>
                   {optImg ? (
-                    <IconButton variant="danger" onClick={() => setOptImage(qi, oi, null)} aria-label="Убрать фото">
+                    <IconButton variant="danger" onClick={() => setOptImage(qi, oi, null)} aria-label={t("remove")}>
                       <TrashIcon size={18} />
                     </IconButton>
                   ) : null}
@@ -353,20 +298,16 @@ function QuizEditor({
               value={q.optionImageSize ?? "s"}
               onChange={(e) => updateQ(qi, { optionImageSize: e.target.value as "s" | "m" | "l" })}
             >
-              <option value="s">Фото вариантов: маленькое</option>
-              <option value="m">Фото вариантов: среднее</option>
-              <option value="l">Фото вариантов: большое</option>
+              <option value="s">{t("optimg_s")}</option>
+              <option value="m">{t("optimg_m")}</option>
+              <option value="l">{t("optimg_l")}</option>
             </select>
           ) : null}
-          <Button
-            small
-            variant="secondary"
-            onClick={() => updateQ(qi, { options: [...q.options, ""] })}
-          >
-            + Вариант
+          <Button small variant="secondary" onClick={() => updateQ(qi, { options: [...q.options, ""] })}>
+            + {t("quiz_add_opt")}
           </Button>
           <Button small variant="danger" onClick={() => setQuestions(questions.filter((_, i) => i !== qi))}>
-            Удалить вопрос
+            {t("quiz_del_q")}
           </Button>
         </div>
       ))}
@@ -375,7 +316,7 @@ function QuizEditor({
         variant="secondary"
         onClick={() => setQuestions([...questions, { id: uid(), text: "", options: ["", ""], correct: [] }])}
       >
-        + Вопрос
+        + {t("quiz_add_q")}
       </Button>
     </div>
   );
@@ -392,13 +333,13 @@ function RulesEditor({
     <div className="col">
       <textarea
         className="field"
-        placeholder="Текст правил"
+        placeholder={t("rules_text_ph")}
         value={config.text}
         onChange={(e) => onChange({ ...config, text: e.target.value })}
       />
       <input
         className="field"
-        placeholder="Текст кнопки согласия (по умолчанию: Согласен)"
+        placeholder={t("rules_agree_ph")}
         value={config.agreeLabel ?? ""}
         onChange={(e) => onChange({ ...config, agreeLabel: e.target.value })}
       />
@@ -415,25 +356,24 @@ function MediaEditor({
 }) {
   return (
     <div className="col">
-      <label className="hint">Тип медиа</label>
       <select
         className="field"
         value={config.kind}
         onChange={(e) => onChange({ ...config, kind: e.target.value as MediaKind })}
       >
-        <option value="image">Картинка</option>
-        <option value="video">Видео</option>
-        <option value="voice">Голосовое</option>
+        <option value="image">image</option>
+        <option value="video">video</option>
+        <option value="voice">voice</option>
       </select>
       <input
         className="field"
-        placeholder="Ссылка на медиа, https://..."
+        placeholder="https://..."
         value={config.url}
         onChange={(e) => onChange({ ...config, url: e.target.value })}
       />
       <input
         className="field"
-        placeholder="Подпись (необязательно)"
+        placeholder="caption"
         value={config.caption ?? ""}
         onChange={(e) => onChange({ ...config, caption: e.target.value })}
       />
