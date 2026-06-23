@@ -600,12 +600,15 @@ function SettingsForm({
       <div className="divider" />
       <span className="icon-row">
         <p className="subtitle">Эмодзи-статус</p>
+        {!premium ? <span className="pill">платно</span> : null}
         <InfoTip text="Пускать только тех, у кого установлен нужный эмодзи-статус. Поставьте себе нужный статус и нажмите кнопку ниже, чтобы задать требование. Платная функция." />
       </span>
       {premium ? (
         <div className="col">
-          <p className="hint">
-            {group.emojiStatusId ? "Требование задано." : "Требование не задано."}
+          <p className="center">
+            <span className={`pill ${group.emojiStatusId ? "approve" : ""}`}>
+              {group.emojiStatusId ? "задано" : "не задано"}
+            </span>
           </p>
           <Button
             small
@@ -620,11 +623,9 @@ function SettingsForm({
               Сбросить требование
             </Button>
           ) : null}
-          {emojiMsg ? <p className="hint">{emojiMsg}</p> : null}
+          {emojiMsg ? <p className="hint center">{emojiMsg}</p> : null}
         </div>
-      ) : (
-        <p className="hint">Доступно на платном тарифе.</p>
-      )}
+      ) : null}
 
       <div className="divider" />
       <div className="row">

@@ -210,7 +210,6 @@ export function AdminPanel() {
 
       <Card>
         <p className="subtitle center">Бан пользователя</p>
-        <p className="hint center">Бот сразу выйдет из всех групп этого пользователя.</p>
         <input
           className="field center"
           inputMode="numeric"

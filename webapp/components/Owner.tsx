@@ -380,38 +380,12 @@ function Home({
         </Card>
         <Card>
           <SectionHeader icon={<ShieldIcon />} title={t("setup_title")} />
-          <StateGif src={GIF.loading} alt="" />
-          <p className="hint">{t("setup_intro")}</p>
           <ol className="steps">
             <li>{t("setup_step_join")}</li>
             <li>{t("setup_step_admin")}</li>
             <li>{t("setup_step_guard")}</li>
             <li>{t("setup_step_scenario")}</li>
           </ol>
-          <p className="hint">{t("setup_note_guard")}</p>
-          <p className="hint">{t("setup_note_check")}</p>
-        </Card>
-        <Card>
-          <SectionHeader icon={<HelpIcon />} title="Как пользоваться" />
-          <div className="col help-list">
-            <p>
-              <b>Группы.</b> Нажми «Добавить бота с правами админа», выбери группу. Она появится
-              здесь сама.
-            </p>
-            <p>
-              <b>Сценарий.</b> Открой группу и собери проверку из блоков: Капча, Квиз, Правила. В
-              вопросы можно добавлять фото.
-            </p>
-            <p>
-              <b>Guard.</b> Включи в группе, чтобы при вступлении человеку открывалась проверка.
-            </p>
-            <p>
-              <b>Журнал.</b> В группе видно, кто подал заявку и как её прошёл.
-            </p>
-            <p>
-              <b>Оплата.</b> Лимит групп расширяется тарифами через CryptoBot.
-            </p>
-          </div>
         </Card>
         </>
       ) : null}
