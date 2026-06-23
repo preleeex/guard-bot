@@ -256,6 +256,15 @@ export async function answerChatJoinRequestQuery(
   });
 }
 
+// Set the bot's default menu button to open the Mini App owner panel. Called on
+// boot so the button always tracks MINI_APP_URL (no manual API call needed when
+// the domain changes).
+export async function setMenuButton(url: string, text = "Открыть"): Promise<void> {
+  await callApi("setChatMenuButton", {
+    menu_button: { type: "web_app", text, web_app: { url } },
+  });
+}
+
 // New API: show a Mini App to the applicant before deciding.
 export async function sendChatJoinRequestWebApp(
   queryId: string,

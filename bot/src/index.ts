@@ -4,7 +4,7 @@ import { prisma } from "./db";
 import { bot } from "./telegram/bot";
 import { buildApp } from "./api/server";
 import { startTimeoutJob, startCleanupJob } from "./jobs/timeout";
-import { getMe } from "./telegram/api";
+import { getMe, setMenuButton } from "./telegram/api";
 
 async function main() {
   // Initialize bot info (needed for my_chat_member self-detection in webhook mode).
@@ -16,6 +16,11 @@ async function main() {
       "bot does not report supports_join_request_queries; running in legacy fallback mode"
     );
   }
+
+  // Keep the default menu button pointed at the current Mini App URL.
+  await setMenuButton(config.miniAppUrl).catch((err) =>
+    logger.warn("setMenuButton failed", { err: String(err) })
+  );
 
   const app = buildApp();
   const server = app.listen(config.port, () => {
