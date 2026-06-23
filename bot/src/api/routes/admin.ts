@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { logger } from "../../logger";
+import { prisma } from "../../db";
 import { requireInitData, requireOperator } from "../auth";
 import { getGlobalStats } from "../../services/stats";
 import { grantManualSlots } from "../../services/payments";
@@ -10,6 +11,8 @@ import {
   resolveAppeal,
   AppealError,
 } from "../../services/appeals";
+import { getAdminFeed, findAdminUser } from "../../services/admin";
+import { broadcastToAll } from "../../services/broadcast";
 
 export const adminRouter = Router();
 adminRouter.use(requireInitData, requireOperator);
@@ -18,6 +21,34 @@ adminRouter.use(requireInitData, requireOperator);
 adminRouter.get("/stats", async (_req, res) => {
   const stats = await getGlobalStats();
   res.json(stats);
+});
+
+// Recent activity feed (groups, payments, bans, new users), newest first.
+adminRouter.get("/feed", async (_req, res) => {
+  const items = await getAdminFeed();
+  res.json({ items });
+});
+
+// Look up a single user: profile, groups, ban status, paid history.
+adminRouter.get("/user/:id", async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) {
+    res.status(400).json({ error: "bad_id" });
+    return;
+  }
+  const data = await findAdminUser(BigInt(req.params.id));
+  res.json(data);
+});
+
+// Broadcast a message to every user (runs in the background).
+adminRouter.post("/broadcast", async (req, res) => {
+  const text = String(req.body?.text ?? "").trim();
+  if (!text) {
+    res.status(400).json({ error: "empty" });
+    return;
+  }
+  const total = await prisma.user.count();
+  void broadcastToAll(text).catch((err) => logger.error("admin broadcast failed", { err: String(err) }));
+  res.json({ started: total });
 });
 
 // List banned users.

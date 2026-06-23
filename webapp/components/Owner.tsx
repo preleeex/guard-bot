@@ -312,7 +312,7 @@ function Home({
       {tab === "billing" ? (
         <>
           <Card>
-            <SectionHeader icon={<CoinIcon />} title="Ваш тариф" />
+            <SectionHeader icon={<CoinIcon />} title={t("plan_your")} />
             <p className="big-number center">
               {quota.unlimited ? "Безлимит" : `${quota.usedGroups} / ${quota.totalSlots}`}
             </p>
@@ -320,27 +320,27 @@ function Home({
 
           {!quota.unlimited ? (
             <>
-              <p className="subtitle center">Поменять план</p>
+              <p className="subtitle center">{t("plan_change")}</p>
               {[
                 {
                   key: "small",
-                  title: "+5 групп",
+                  title: t("plan_small"),
                   price: "2.99$",
-                  perks: ["5 дополнительных групп", "Базовая поддержка"],
+                  perks: [t("perk_5groups"), t("perk_support_basic")],
                   best: false,
                 },
                 {
                   key: "big",
-                  title: "+15 групп",
+                  title: t("plan_big"),
                   price: "6.99$",
-                  perks: ["15 дополнительных групп", "Приоритетная загрузка", "Поддержка в чате"],
+                  perks: [t("perk_15groups"), t("perk_priority_load"), t("perk_support_chat")],
                   best: true,
                 },
                 {
                   key: "unlimited",
-                  title: "Безлимит",
+                  title: t("plan_unlimited"),
                   price: "14.99$",
-                  perks: ["Группы без лимита", "Максимальный приоритет", "Поддержка 24/7"],
+                  perks: [t("perk_unlim_groups"), t("perk_priority_max"), t("perk_support_24")],
                   best: false,
                 },
               ].map((p) => (
@@ -352,7 +352,7 @@ function Home({
                 >
                   <div className="plan-card-head">
                     <span className="plan-title">{p.title}</span>
-                    {p.best ? <span className="plan-badge">выгоднее всего</span> : null}
+                    {p.best ? <span className="plan-badge">{t("plan_best")}</span> : null}
                   </div>
                   <ul className="plan-perks">
                     {p.perks.map((perk) => (
@@ -364,7 +364,7 @@ function Home({
               ))}
               {awaiting ? (
                 <Button variant="secondary" disabled={checking} onClick={checkPayment}>
-                  Проверить оплату
+                  {t("plan_check")}
                 </Button>
               ) : null}
               {error ? (
@@ -415,20 +415,20 @@ function Home({
       <nav className="bottom-nav">
         <button className={tab === "groups" ? "active" : ""} onClick={() => setTab("groups")}>
           <UsersIcon size={22} />
-          <span>Группы</span>
+          <span>{t("nav_groups")}</span>
         </button>
         <button className={tab === "billing" ? "active" : ""} onClick={() => setTab("billing")}>
           <CoinIcon size={22} />
-          <span>Тариф</span>
+          <span>{t("nav_billing")}</span>
         </button>
         <button className={tab === "help" ? "active" : ""} onClick={() => setTab("help")}>
           <HelpIcon size={22} />
-          <span>Помощь</span>
+          <span>{t("nav_help")}</span>
         </button>
         {isOperator ? (
           <button className={tab === "admin" ? "active" : ""} onClick={() => setTab("admin")}>
             <StarIcon size={22} />
-            <span>Админ</span>
+            <span>{t("nav_admin")}</span>
           </button>
         ) : null}
       </nav>

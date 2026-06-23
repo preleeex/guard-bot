@@ -12,12 +12,13 @@ import { Preview } from "./Preview";
 
 type Tab = "scenario" | "settings" | "queue" | "journal";
 
-const decisionLabel: Record<string, string> = {
-  approve: "Одобрено",
-  decline: "Отклонено",
-  queue: "Очередь",
-  timeout: "Таймаут",
-};
+function decLabel(d: string): string {
+  if (d === "approve") return t("dec_approve");
+  if (d === "decline") return t("dec_decline");
+  if (d === "queue") return t("dec_queue");
+  if (d === "timeout") return t("dec_timeout");
+  return d;
+}
 
 export function GroupDetail({
   chatId,
@@ -130,7 +131,7 @@ export function GroupDetail({
       {chatUsername ? (
         <Button variant="secondary" onClick={() => openExternal(`https://t.me/${chatUsername}`)}>
           <span className="btn-icon">
-            <ExternalIcon size={18} /> Перейти в группу
+            <ExternalIcon size={18} /> {t("go_to_group")}
           </span>
         </Button>
       ) : null}
@@ -138,7 +139,7 @@ export function GroupDetail({
       <Card>
         <div className="row">
           <span className="icon-row">
-            <p className="subtitle">Guard mode</p>
+            <p className="subtitle">{t("guard_mode")}</p>
             <InfoTip text="Включает проверку при вступлении: человек проходит сценарий в Mini App, и только потом его впускают." />
           </span>
           <Toggle
@@ -155,16 +156,16 @@ export function GroupDetail({
 
       <div className="group-tabs">
         <Button small variant={tab === "scenario" ? "primary" : "secondary"} onClick={() => setTab("scenario")}>
-          Сценарий
+          {t("gd_scenario")}
         </Button>
         <Button small variant={tab === "settings" ? "primary" : "secondary"} onClick={() => setTab("settings")}>
-          Настройки
+          {t("gd_settings")}
         </Button>
         <Button small variant={tab === "queue" ? "primary" : "secondary"} onClick={() => setTab("queue")}>
           {t("queue_title")}
         </Button>
         <Button small variant={tab === "journal" ? "primary" : "secondary"} onClick={() => setTab("journal")}>
-          Журнал
+          {t("gd_journal")}
         </Button>
       </div>
 
@@ -199,7 +200,7 @@ export function GroupDetail({
       {tab === "journal" ? (
         <>
           <StatsCard chatId={chatId} />
-          <JournalList chatId={chatId} decisionLabel={decisionLabel} highlightUserId={initialJournalUserId} />
+          <JournalList chatId={chatId} highlightUserId={initialJournalUserId} />
           <GroupBansCard chatId={chatId} />
         </>
       ) : null}
@@ -702,11 +703,9 @@ function SettingsForm({
 
 function JournalList({
   chatId,
-  decisionLabel,
   highlightUserId,
 }: {
   chatId: string;
-  decisionLabel: Record<string, string>;
   highlightUserId?: string;
 }) {
   const [entries, setEntries] = useState<JournalEntry[] | null>(null);
@@ -744,7 +743,7 @@ function JournalList({
             >
               <Avatar name={e.applicantName ?? e.applicantUsername ?? undefined} size={36} />
               <span className="list-item-title">{name}</span>
-              <span className={`pill ${e.decision}`}>{decisionLabel[e.decision] ?? e.decision}</span>
+              <span className={`pill ${e.decision}`}>{decLabel(e.decision)}</span>
             </button>
             {expanded ? (
               <div className="col" style={{ gap: 6 }}>

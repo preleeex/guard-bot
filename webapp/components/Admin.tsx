@@ -32,6 +32,19 @@ interface Appeal {
   createdAt: string;
 }
 
+interface SearchResult {
+  user: {
+    id: string;
+    username: string | null;
+    firstName: string | null;
+    startedAt: string;
+    manualExtraSlots: number;
+  } | null;
+  groups: { chatId: string; title: string | null; guardEnabled: boolean }[];
+  banned: boolean;
+  payments: { amount: string; currency: string; slotsAdded: number; paidAt: string | null }[];
+}
+
 function AppealPhoto({ appealId }: { appealId: string }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
@@ -74,16 +87,52 @@ export function AdminPanel() {
   const [appeals, setAppeals] = useState<Appeal[]>([]);
   const [appealStatus, setAppealStatus] = useState("");
 
+  const [feed, setFeed] = useState<{ kind: string; at: string; text: string }[]>([]);
+  const [searchId, setSearchId] = useState("");
+  const [searchRes, setSearchRes] = useState<SearchResult | null>(null);
+  const [searchErr, setSearchErr] = useState("");
+  const [bcText, setBcText] = useState("");
+  const [bcStatus, setBcStatus] = useState("");
+
   const load = () => api.get<Stats>("/api/admin/stats").then(setStats);
   const loadBanned = () =>
     api.get<{ banned: Banned[] }>("/api/admin/banned").then((r) => setBanned(r.banned));
   const loadAppeals = () =>
     api.get<{ appeals: Appeal[] }>("/api/admin/appeals").then((r) => setAppeals(r.appeals));
+  const loadFeed = () =>
+    api.get<{ items: { kind: string; at: string; text: string }[] }>("/api/admin/feed").then((r) => setFeed(r.items));
   useEffect(() => {
     load();
     loadBanned();
     loadAppeals();
+    loadFeed();
   }, []);
+
+  const searchUser = async () => {
+    setSearchErr("");
+    setSearchRes(null);
+    if (!/^\d+$/.test(searchId)) {
+      setSearchErr("Введите числовой id.");
+      return;
+    }
+    try {
+      setSearchRes(await api.get<SearchResult>(`/api/admin/user/${searchId}`));
+    } catch (e) {
+      setSearchErr((e as ApiError).message || "Ошибка.");
+    }
+  };
+
+  const sendBroadcast = async () => {
+    setBcStatus("");
+    if (!bcText.trim()) return;
+    try {
+      const r = await api.post<{ started: number }>("/api/admin/broadcast", { text: bcText });
+      setBcStatus(`Рассылка запущена: ${r.started} получателей.`);
+      setBcText("");
+    } catch (e) {
+      setBcStatus((e as ApiError).message || "Ошибка.");
+    }
+  };
 
   const grant = async () => {
     setStatus("");
@@ -144,6 +193,96 @@ export function AdminPanel() {
 
   return (
     <>
+      <Card>
+        <p className="subtitle center">Поиск пользователя</p>
+        <div className="row" style={{ gap: 8 }}>
+          <input
+            className="field"
+            inputMode="numeric"
+            placeholder="user_id"
+            value={searchId}
+            onChange={(e) => setSearchId(e.target.value)}
+          />
+          <Button small onClick={searchUser}>
+            Найти
+          </Button>
+        </div>
+        {searchErr ? <p className="hint center">{searchErr}</p> : null}
+        {searchRes ? (
+          <div className="col" style={{ gap: 4 }}>
+            <p className="hint">
+              {searchRes.user
+                ? `${searchRes.user.username ? "@" + searchRes.user.username : searchRes.user.firstName ?? ""} · id ${searchRes.user.id}`
+                : "Пользователь не запускал бота"}
+            </p>
+            <p className="hint">Бан: {searchRes.banned ? "да" : "нет"}</p>
+            <p className="hint">Групп: {searchRes.groups.length}</p>
+            {searchRes.groups.map((g) => (
+              <p className="hint" key={g.chatId}>
+                {g.title ?? g.chatId} · {g.guardEnabled ? "guard вкл" : "guard выкл"}
+              </p>
+            ))}
+            <p className="hint">Оплат: {searchRes.payments.length}</p>
+            <div className="row" style={{ gap: 8 }}>
+              <Button
+                small
+                onClick={() => {
+                  setUserId(searchId);
+                }}
+              >
+                Выдать слоты
+              </Button>
+              {searchRes.banned ? (
+                <Button small variant="secondary" onClick={() => unban(searchId)}>
+                  Разбанить
+                </Button>
+              ) : (
+                <Button
+                  small
+                  variant="danger"
+                  onClick={() => {
+                    setBanId(searchId);
+                  }}
+                >
+                  В бан
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </Card>
+
+      <Card>
+        <p className="subtitle center">Рассылка всем</p>
+        <textarea
+          className="field"
+          placeholder="Текст рассылки"
+          value={bcText}
+          onChange={(e) => setBcText(e.target.value)}
+        />
+        <Button disabled={!bcText.trim()} onClick={sendBroadcast}>
+          Отправить всем
+        </Button>
+        {bcStatus ? <p className="hint center">{bcStatus}</p> : null}
+      </Card>
+
+      <Card>
+        <p className="subtitle center">Лента событий</p>
+        {feed.length === 0 ? (
+          <p className="hint center">Событий пока нет</p>
+        ) : (
+          feed.map((it, i) => (
+            <div className="row" key={i}>
+              <span className="hint">{it.text}</span>
+              <span className="hint">{new Date(it.at).toLocaleString("ru-RU")}</span>
+            </div>
+          ))
+        )}
+        <button className="link-btn" onClick={loadFeed}>
+          Обновить
+        </button>
+      </Card>
+
       <div className="section-header">
         <span className="section-icon">
           <StarIcon />
