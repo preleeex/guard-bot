@@ -248,7 +248,10 @@ function Home({
     } catch {
       // best effort: local choice still applies
     }
-    window.location.reload();
+    // Re-fetch + re-render in the new language instead of a full page reload:
+    // window.location.reload() can drop the Telegram launch initData on some
+    // clients, which then 401s every API call and shows an error.
+    await reload();
   };
 
   return (
