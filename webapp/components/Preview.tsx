@@ -5,12 +5,10 @@ import type { ResultPolicy, ScenarioBlock } from "@/lib/types";
 import { buildPreview, evaluatePreview } from "@/lib/evaluate";
 import { Button, Card } from "./ui";
 import { BlockForm, isBlockAnswered, type Payload } from "./BlockForm";
+import { t } from "@/lib/i18n";
 
-const decisionText: Record<string, string> = {
-  approve: "Одобрено",
-  decline: "Отклонено",
-  queue: "На ручную проверку",
-};
+const decisionText = (d: string): string =>
+  d === "approve" ? t("dec_approve") : d === "decline" ? t("dec_decline") : t("prev_queue");
 
 // Owner runs their own scenario exactly as an applicant would, before publishing.
 export function Preview({
@@ -36,15 +34,15 @@ export function Preview({
   if (result) {
     return (
       <Card>
-        <p className="title">Предпросмотр: результат</p>
+        <p className="title">{t("prev_result")}</p>
         <p>
-          <span className={`pill ${result.decision}`}>{decisionText[result.decision]}</span>
+          <span className={`pill ${result.decision}`}>{decisionText(result.decision)}</span>
         </p>
         <p className="hint">
-          Балл: {result.score}. {result.reason}
+          {t("j_score")}: {result.score}. {result.reason}
         </p>
         <Button variant="secondary" onClick={onClose}>
-          Закрыть предпросмотр
+          {t("prev_close")}
         </Button>
       </Card>
     );
@@ -53,10 +51,10 @@ export function Preview({
   if (blocks.length === 0) {
     return (
       <Card>
-        <p className="title">Предпросмотр</p>
-        <p className="hint">Сценарий пуст. Добавьте блоки.</p>
+        <p className="title">{t("prev_title")}</p>
+        <p className="hint">{t("prev_empty")}</p>
         <Button variant="secondary" onClick={onClose}>
-          Закрыть
+          {t("btn_close")}
         </Button>
       </Card>
     );
@@ -65,7 +63,7 @@ export function Preview({
   return (
     <Card>
       <div className="row">
-        <p className="subtitle">Предпросмотр</p>
+        <p className="subtitle">{t("prev_title")}</p>
         <p className="hint">
           {step + 1} / {blocks.length}
         </p>
@@ -77,18 +75,18 @@ export function Preview({
       />
       {!isLast ? (
         <Button disabled={!canProceed} onClick={() => setStep((s) => s + 1)}>
-          Далее
+          {t("next")}
         </Button>
       ) : (
         <Button
           disabled={!canProceed}
           onClick={() => setResult(evaluatePreview(draft, prepared.secrets, answers, policy))}
         >
-          Завершить
+          {t("finish")}
         </Button>
       )}
       <Button variant="danger" onClick={onClose}>
-        Выйти из предпросмотра
+        {t("prev_leave")}
       </Button>
     </Card>
   );

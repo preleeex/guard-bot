@@ -76,9 +76,9 @@ export function GroupDetail({
       await api.put(`/api/owner/groups/${chatId}/scenario`, {
         blocks: blocks.map((b) => ({ type: b.type, config: b.config })),
       });
-      setStatus("Сценарий сохранён.");
+      setStatus(t("st_scenario_saved"));
     } catch (e) {
-      setStatus((e as ApiError).message || "Ошибка сохранения.");
+      setStatus((e as ApiError).message || t("save_error"));
     } finally {
       setSaving(false);
     }
@@ -103,9 +103,9 @@ export function GroupDetail({
         allowEditAnswers: group.allowEditAnswers,
       });
       setGroup(res.group);
-      setStatus("Настройки сохранены.");
+      setStatus(t("st_settings_saved"));
     } catch (e) {
-      setStatus((e as ApiError).message || "Ошибка сохранения.");
+      setStatus((e as ApiError).message || t("save_error"));
     } finally {
       setSaving(false);
     }
@@ -123,7 +123,7 @@ export function GroupDetail({
     <div className="app">
       <div className="row">
         <Button small variant="secondary" onClick={onBack}>
-          Назад
+          {t("back")}
         </Button>
         <p className="subtitle">{group.title ?? group.chatId}</p>
       </div>
@@ -140,7 +140,7 @@ export function GroupDetail({
         <div className="row">
           <span className="icon-row">
             <p className="subtitle">{t("guard_mode")}</p>
-            <InfoTip text="Включает проверку при вступлении: человек проходит сценарий в Mini App, и только потом его впускают." />
+            <InfoTip text={t("tip_guard")} />
           </span>
           <Toggle
             checked={group.guardEnabled}
@@ -175,10 +175,10 @@ export function GroupDetail({
         <>
           <ScenarioBuilder blocks={blocks} onChange={setBlocks} />
           <Button variant="secondary" onClick={() => setPreview(true)}>
-            Предпросмотр
+            {t("btn_preview")}
           </Button>
           <Button disabled={saving} onClick={saveScenario}>
-            Сохранить сценарий
+            {t("btn_save_scenario")}
           </Button>
         </>
       ) : null}
@@ -227,7 +227,7 @@ function SetupCheck({ chatId }: { chatId: string }) {
     try {
       setReport(await api.get<SetupReport>(`/api/owner/groups/${chatId}/check`));
     } catch (e) {
-      setErr((e as ApiError).message || "Не удалось проверить.");
+      setErr((e as ApiError).message || t("st_check_failed"));
     } finally {
       setBusy(false);
     }
@@ -518,9 +518,9 @@ function SettingsForm({
     try {
       const res = await api.post<{ group: Group }>(`/api/owner/groups/${chatId}/emoji-status`, { clear });
       setGroup(res.group);
-      setEmojiMsg(clear ? "Эмодзи-статус сброшен." : "Эмодзи-статус сохранён.");
+      setEmojiMsg(clear ? t("emoji_cleared") : t("emoji_saved"));
     } catch (e) {
-      setEmojiMsg((e as ApiError).message || "Не удалось.");
+      setEmojiMsg((e as ApiError).message || t("emoji_failed"));
     } finally {
       setEmojiBusy(false);
     }
@@ -529,19 +529,19 @@ function SettingsForm({
   return (
     <Card>
       <span className="icon-row">
-        <p className="subtitle">Результат проверки</p>
-        <InfoTip text="Что делать с заявкой: авто-одобрить при успехе, авто-отклонить при провале, либо отправить в очередь на ручное решение при пороговом балле." />
+        <p className="subtitle">{t("res_title")}</p>
+        <InfoTip text={t("tip_result")} />
       </span>
       <div className="row">
-        <span>Авто-одобрение при успехе</span>
+        <span>{t("res_auto_approve")}</span>
         <Toggle checked={policy.passApprove} onChange={(v) => setPolicy({ passApprove: v })} />
       </div>
       <div className="row">
-        <span>Авто-отклонение при провале</span>
+        <span>{t("res_auto_decline")}</span>
         <Toggle checked={policy.failDecline} onChange={(v) => setPolicy({ failDecline: v })} />
       </div>
       <div className="row">
-        <span>Очередь при пороге</span>
+        <span>{t("res_queue_threshold")}</span>
         <Toggle
           checked={useThreshold}
           onChange={(v) => setPolicy({ queueThreshold: v ? 60 : null })}
@@ -549,7 +549,7 @@ function SettingsForm({
       </div>
       {useThreshold ? (
         <div className="col">
-          <label className="hint">Порог, %</label>
+          <label className="hint">{t("res_threshold")}</label>
           <input
             className="field"
             inputMode="numeric"
@@ -563,13 +563,13 @@ function SettingsForm({
 
       <div className="divider" />
       <span className="icon-row">
-        <p className="subtitle">Время на прохождение</p>
-        <InfoTip text="Сколько секунд даётся на прохождение. По истечении применяется действие ниже." />
+        <p className="subtitle">{t("timeout_title")}</p>
+        <InfoTip text={t("tip_time")} />
       </span>
       <input
         className="field"
         inputMode="numeric"
-        placeholder="секунды"
+        placeholder={t("secs_ph")}
         value={String(group.timeoutSeconds)}
         onChange={(e) => setGroup({ ...group, timeoutSeconds: Math.max(30, Number(e.target.value) || 600) })}
       />
@@ -578,19 +578,19 @@ function SettingsForm({
         value={group.timeoutAction}
         onChange={(e) => setGroup({ ...group, timeoutAction: e.target.value as "queue" | "decline" })}
       >
-        <option value="queue">По таймауту: ручная проверка</option>
-        <option value="decline">По таймауту: отклонить</option>
+        <option value="queue">{t("timeout_queue")}</option>
+        <option value="decline">{t("timeout_decline")}</option>
       </select>
 
       <div className="divider" />
       <span className="icon-row">
-        <p className="subtitle">Кулдаун после отказа</p>
-        <InfoTip text="Сколько секунд после отказа повторные заявки от этого человека авто-отклоняются, чтобы не спамил." />
+        <p className="subtitle">{t("cooldown_title")}</p>
+        <InfoTip text={t("tip_cooldown")} />
       </span>
       <input
         className="field"
         inputMode="numeric"
-        placeholder="секунды, 0 = выкл"
+        placeholder={t("secs_off_ph")}
         value={String(group.cooldownSeconds ?? 0)}
         onChange={(e) =>
           setGroup({ ...group, cooldownSeconds: Math.max(0, Number(e.target.value) || 0) })
@@ -600,8 +600,8 @@ function SettingsForm({
       <div className="divider" />
       <div className="row">
         <span className="icon-row">
-          <span>Разрешить менять ответ</span>
-          <InfoTip text="Заявитель может вернуться назад и изменить ответ до отправки. Если выключено, ответы менять нельзя." />
+          <span>{t("allow_edit_title")}</span>
+          <InfoTip text={t("tip_allow_edit")} />
         </span>
         <Toggle
           checked={group.allowEditAnswers}
@@ -612,8 +612,8 @@ function SettingsForm({
       <div className="divider" />
       <div className="row">
         <span className="icon-row">
-          <span>Голосовая проверка</span>
-          <InfoTip text="Вместо Mini App заявителя просят записать голосовое боту в личку. Вы получаете его с кнопками Принять и Отклонить. Заменяет сценарий." />
+          <span>{t("voice_set_title")}</span>
+          <InfoTip text={t("tip_voice")} />
         </span>
         <Toggle
           checked={group.voiceScreening}
@@ -623,7 +623,7 @@ function SettingsForm({
       {group.voiceScreening ? (
         <textarea
           className="field"
-          placeholder="Что записать (например: коротко расскажите о себе)"
+          placeholder={t("voice_prompt_ph")}
           value={group.voicePrompt ?? ""}
           onChange={(e) => setGroup({ ...group, voicePrompt: e.target.value })}
         />
@@ -631,15 +631,15 @@ function SettingsForm({
 
       <div className="divider" />
       <span className="icon-row">
-        <p className="subtitle">Эмодзи-статус</p>
-        {!premium ? <span className="pill">платно</span> : null}
-        <InfoTip text="Пускать только тех, у кого установлен нужный эмодзи-статус. Поставьте себе нужный статус и нажмите кнопку ниже, чтобы задать требование. Платная функция." />
+        <p className="subtitle">{t("emoji_title")}</p>
+        {!premium ? <span className="pill">{t("paid_badge")}</span> : null}
+        <InfoTip text={t("tip_emoji")} />
       </span>
       {premium ? (
         <div className="col">
           <p className="center">
             <span className={`pill ${group.emojiStatusId ? "approve" : ""}`}>
-              {group.emojiStatusId ? "задано" : "не задано"}
+              {group.emojiStatusId ? t("emoji_set") : t("emoji_unset")}
             </span>
           </p>
           <Button
@@ -648,11 +648,11 @@ function SettingsForm({
             disabled={emojiBusy}
             onClick={() => setMyEmojiStatus(false)}
           >
-            Использовать мой текущий эмодзи-статус
+            {t("emoji_use_current")}
           </Button>
           {group.emojiStatusId ? (
             <Button small variant="danger" disabled={emojiBusy} onClick={() => setMyEmojiStatus(true)}>
-              Сбросить требование
+              {t("emoji_reset")}
             </Button>
           ) : null}
           {emojiMsg ? <p className="hint center">{emojiMsg}</p> : null}
@@ -663,7 +663,7 @@ function SettingsForm({
       <div className="row">
         <span className="icon-row">
           <span>{t("welcome_title")}</span>
-          <InfoTip text="После одобрения бот публикует приветствие в группе с упоминанием нового участника. Можно автоудаление через N секунд." />
+          <InfoTip text={t("tip_welcome")} />
         </span>
         <Toggle
           checked={group.welcomeEnabled}
@@ -695,7 +695,7 @@ function SettingsForm({
       ) : null}
 
       <Button disabled={saving} onClick={onSave}>
-        Сохранить
+        {t("save")}
       </Button>
     </Card>
   );
@@ -725,7 +725,7 @@ function JournalList({
   if (entries.length === 0)
     return (
       <Card>
-        <p className="hint center">Журнал пуст.</p>
+        <p className="hint center">{t("journal_empty")}</p>
       </Card>
     );
 
@@ -748,19 +748,19 @@ function JournalList({
             {expanded ? (
               <div className="col" style={{ gap: 6 }}>
                 <div className="divider" />
-                {e.applicantName ? <p className="hint">Имя: {e.applicantName}</p> : null}
+                {e.applicantName ? <p className="hint">{t("j_name")}: {e.applicantName}</p> : null}
                 {e.applicantUsername ? <p className="hint">Username: @{e.applicantUsername}</p> : null}
                 <p className="hint">ID: {e.applicantUserId}</p>
-                <p className="hint">Когда: {new Date(e.finishedAt).toLocaleString("ru-RU")}</p>
-                {e.score != null ? <p className="hint">Балл: {e.score}</p> : null}
-                {e.reason ? <p className="hint">Причина: {e.reason}</p> : null}
+                <p className="hint">{t("j_when")}: {new Date(e.finishedAt).toLocaleString()}</p>
+                {e.score != null ? <p className="hint">{t("j_score")}: {e.score}</p> : null}
+                {e.reason ? <p className="hint">{t("j_reason")}: {e.reason}</p> : null}
                 {e.applicantUsername ? (
                   <Button
                     small
                     variant="secondary"
                     onClick={() => openExternal(`https://t.me/${e.applicantUsername}`)}
                   >
-                    Посмотреть профиль
+                    {t("view_profile")}
                   </Button>
                 ) : null}
                 <Button
@@ -782,7 +782,7 @@ function JournalList({
             ) : (
               <p className="hint">
                 {new Date(e.finishedAt).toLocaleString("ru-RU")}
-                {e.score != null ? ` · балл ${e.score}` : ""}
+                {e.score != null ? ` · ${t("score_short")} ${e.score}` : ""}
               </p>
             )}
           </Card>

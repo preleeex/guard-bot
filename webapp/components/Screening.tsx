@@ -58,7 +58,7 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
   const loadScenario = useCallback(async () => {
     if (!sessionId) {
       setState("error");
-      setError("Сессия не указана.");
+      setError(t("session_missing"));
       return;
     }
     setState("loading");
@@ -101,14 +101,14 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
       setRemaining(rem);
       if (rem <= 0) {
         setDecision("timeout");
-        setResult("Время вышло.");
+        setResult(t("time_up"));
         setState("done");
         setTimeout(() => getWebApp()?.close(), 2500);
       }
     };
     tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
   }, [state, deadline]);
 
   const current = blocks[step];

@@ -36,15 +36,13 @@ function SubscriptionGate({ sub, onCheck }: { sub: Subscription; onCheck: () => 
   return (
     <div className="app">
       <Card>
-        <p className="title center">Подпишись на канал</p>
-        <p className="hint center">
-          Чтобы пользоваться панелью, подпишись на канал и нажми «Проверить».
-        </p>
+        <p className="title center">{t("sub_title")}</p>
+        <p className="hint center">{t("sub_panel_text")}</p>
         <Button onClick={() => sub.url && openExternal(sub.url)}>
-          Открыть канал{sub.username ? ` @${sub.username}` : ""}
+          {t("open_channel")}{sub.username ? ` @${sub.username}` : ""}
         </Button>
         <Button variant="secondary" onClick={onCheck}>
-          Проверить
+          {t("check")}
         </Button>
       </Card>
     </div>
@@ -75,7 +73,7 @@ export function OwnerApp({
         setBanned(true);
         return;
       }
-      setError((e as ApiError).message || "Не удалось загрузить.");
+      setError((e as ApiError).message || t("st_load_failed"));
     } finally {
       setLoading(false);
     }
@@ -122,8 +120,8 @@ export function OwnerApp({
       <div className="app">
         <Card>
           <StateGif src={GIF.empty} alt="" />
-          <p className="title center">Технические работы</p>
-          <p className="hint center">Загляни немного позже.</p>
+          <p className="title center">{t("maint_title")}</p>
+          <p className="hint center">{t("maint_text")}</p>
         </Card>
       </div>
     );
@@ -194,7 +192,7 @@ function Home({
       setChat("");
       await reload();
     } catch (e) {
-      setError((e as ApiError).message || "Не удалось добавить группу.");
+      setError((e as ApiError).message || t("st_add_failed"));
     } finally {
       setAdding(false);
     }
@@ -210,7 +208,7 @@ function Home({
         setAwaiting(true);
       }
     } catch (e) {
-      setError((e as ApiError).message || "Оплата недоступна.");
+      setError((e as ApiError).message || t("st_pay_unavailable"));
     } finally {
       setBuying(false);
     }
@@ -244,7 +242,7 @@ function Home({
         <Avatar photoUrl={avatarUrl} name={profileName} size={40} />
         <div>
           <p className="profile-name" style={{ fontSize: 16 }}>
-            {profileName || "Профиль"}
+            {profileName || t("profile_default")}
           </p>
           {profile?.username ? <p className="hint">@{profile.username}</p> : null}
         </div>
@@ -253,7 +251,7 @@ function Home({
       {tab === "groups" ? (
         <>
           <Card>
-            <SectionHeader icon={<UsersIcon />} title="Группы" />
+            <SectionHeader icon={<UsersIcon />} title={t("nav_groups")} />
             <div className="col">
               {groups.length === 0 ? (
                 <StateGif src={GIF.empty} alt="" />
@@ -265,39 +263,39 @@ function Home({
                     </span>
                     <span className="list-item-title">{g.title ?? g.chatId}</span>
                     <span className={`pill ${g.guardEnabled ? "approve" : ""}`}>
-                      {g.guardEnabled ? "вкл" : "выкл"}
+                      {g.guardEnabled ? t("on_short") : t("off_short")}
                     </span>
                   </button>
                 ))
               )}
             </div>
             <button className="link-btn" onClick={() => reload()}>
-              Обновить
+              {t("btn_refresh")}
             </button>
           </Card>
 
           <Card>
-            <SectionHeader icon={<GroupAddIcon />} title="Добавить группу" />
+            <SectionHeader icon={<GroupAddIcon />} title={t("add_group_title")} />
             <Button onClick={() => openExternal(ADD_TO_GROUP_LINK)}>
               <span className="btn-icon">
-                <PlusIcon size={18} /> Добавить бота с правами админа
+                <PlusIcon size={18} /> {t("btn_add_bot_admin")}
               </span>
             </Button>
             {showManual ? (
               <>
                 <input
                   className="field center"
-                  placeholder="@username или id"
+                  placeholder={t("username_ph")}
                   value={chat}
                   onChange={(e) => setChat(e.target.value)}
                 />
                 <Button variant="secondary" disabled={adding || !chat.trim()} onClick={addGroup}>
-                  Подключить
+                  {t("btn_connect")}
                 </Button>
               </>
             ) : (
               <button className="link-btn" onClick={() => setShowManual(true)}>
-                Подключить вручную
+                {t("btn_manual_connect")}
               </button>
             )}
             {error ? (
@@ -314,7 +312,7 @@ function Home({
           <Card>
             <SectionHeader icon={<CoinIcon />} title={t("plan_your")} />
             <p className="big-number center">
-              {quota.unlimited ? "Безлимит" : `${quota.usedGroups} / ${quota.totalSlots}`}
+              {quota.unlimited ? t("plan_unlimited") : `${quota.usedGroups} / ${quota.totalSlots}`}
             </p>
           </Card>
 
@@ -389,14 +387,14 @@ function Home({
               variant={getLang() === "ru" ? "primary" : "secondary"}
               onClick={() => switchLang("ru")}
             >
-              Русский
+              {t("lang_ru")}
             </Button>
             <Button
               small
               variant={getLang() === "en" ? "primary" : "secondary"}
               onClick={() => switchLang("en")}
             >
-              English
+              {t("lang_en")}
             </Button>
           </div>
         </Card>

@@ -8,6 +8,7 @@ import type {
   RulesConfig,
   ScenarioBlock,
 } from "@/lib/types";
+import { t } from "@/lib/i18n";
 
 export type Payload = Record<string, unknown>;
 
@@ -27,19 +28,19 @@ export function BlockForm({
       const pressed = payload.pressed === true;
       return (
         <div className="col">
-          <p className="subtitle">Подтверждение</p>
+          <p className="subtitle">{t("bf_confirm")}</p>
           <button
             className={`option ${pressed ? "selected" : ""}`}
             onClick={() => onChange({ pressed: true })}
           >
-            {cfg.buttonLabel || "Я не робот"}
+            {cfg.buttonLabel || t("bf_not_robot")}
           </button>
         </div>
       );
     }
     return (
       <div className="col">
-        <p className="subtitle">Капча</p>
+        <p className="subtitle">{t("b_captcha")}</p>
         {cfg.kind === "visual" && cfg.code ? (
           <div className="captcha-code">{cfg.code}</div>
         ) : (
@@ -48,7 +49,7 @@ export function BlockForm({
         <input
           className="field"
           inputMode={cfg.kind === "math" ? "numeric" : "text"}
-          placeholder={cfg.kind === "math" ? "Ответ" : "Введите код"}
+          placeholder={cfg.kind === "math" ? t("bf_answer") : t("bf_enter_code")}
           value={String(payload.value ?? "")}
           onChange={(e) => onChange({ value: e.target.value })}
         />
@@ -67,7 +68,7 @@ export function BlockForm({
     };
     return (
       <div className="col">
-        <p className="subtitle">Вопросы</p>
+        <p className="subtitle">{t("bf_questions")}</p>
         {(cfg.questions ?? []).map((q) => (
           <div className="col" key={q.id}>
             {q.image ? (
@@ -124,13 +125,13 @@ export function BlockForm({
     const agreed = payload.agreed === true;
     return (
       <div className="col">
-        <p className="subtitle">Правила</p>
+        <p className="subtitle">{t("b_rules")}</p>
         <p className="rules-text">{cfg.text}</p>
         <button
           className={`option ${agreed ? "selected" : ""}`}
           onClick={() => onChange({ agreed: true })}
         >
-          {cfg.agreeLabel || "Согласен"}
+          {cfg.agreeLabel || t("bf_agree")}
         </button>
       </div>
     );
@@ -138,7 +139,7 @@ export function BlockForm({
 
   return (
     <div className="col">
-      <p className="hint">Неизвестный тип блока: {block.type}</p>
+      <p className="hint">{t("bf_unknown")} {block.type}</p>
     </div>
   );
 }

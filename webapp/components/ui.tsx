@@ -2,13 +2,14 @@
 
 import React, { useState } from "react";
 import { GIF } from "@/lib/assets";
+import { t } from "@/lib/i18n";
 
 // A small "?" button that opens a bottom sheet with a short explanation.
 export function InfoTip({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className="info-tip" aria-label="Что это" onClick={() => setOpen(true)}>
+      <button type="button" className="info-tip" aria-label={t("ui_whatis")} onClick={() => setOpen(true)}>
         ?
       </button>
       {open ? <Sheet onClose={() => setOpen(false)}>{text}</Sheet> : null}
@@ -24,7 +25,7 @@ export function Sheet({ children, onClose }: { children: React.ReactNode; onClos
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <span className="sheet-handle" />
         <p className="sheet-text">{children}</p>
-        <Button onClick={onClose}>Понятно</Button>
+        <Button onClick={onClose}>{t("ui_got_it")}</Button>
       </div>
     </div>
   );
@@ -117,13 +118,14 @@ export function StateGif({ src, alt = "" }: { src: string; alt?: string }) {
 }
 
 // Custom animated progress bar (replaces the loading GIF).
-export function Loading({ text = "Загрузка" }: { text?: string }) {
+export function Loading({ text }: { text?: string }) {
+  const label = text ?? t("ui_loading");
   return (
     <div className="app loading-wrap">
       <div className="progress">
         <div className="progress-bar" />
       </div>
-      <p className="hint center">{text}</p>
+      <p className="hint center">{label}</p>
     </div>
   );
 }
@@ -154,9 +156,9 @@ export function ErrorState({ text, onRetry }: { text: string; onRetry: () => voi
     <div className="app">
       <Card>
         <StateGif src={GIF.empty} alt="" />
-        <p className="title center">Ошибка</p>
+        <p className="title center">{t("ui_error")}</p>
         <p className="hint center">{text}</p>
-        <Button onClick={onRetry}>Повторить</Button>
+        <Button onClick={onRetry}>{t("ui_retry")}</Button>
       </Card>
     </div>
   );
