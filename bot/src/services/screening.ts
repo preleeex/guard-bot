@@ -170,12 +170,15 @@ export async function getPublicScenario(sessionId: string, applicantUserId: bigi
     return { id: block.id, type: block.type, config: block.config };
   });
 
+  const scenarioGroup = await prisma.group.findUnique({ where: { chatId: session.chatId } });
+
   return {
     sessionId: session.id,
     expiresAt: session.expiresAt,
     blocks: publicBlocks,
     voice: false as const,
     voicePrompt: null,
+    allowEdit: scenarioGroup?.allowEditAnswers ?? true,
   };
 }
 

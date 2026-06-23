@@ -25,6 +25,7 @@ interface ScenarioResponse {
   subscription?: Subscription;
   voice?: boolean;
   voicePrompt?: string | null;
+  allowEdit?: boolean;
 }
 
 const decisionText = (decision: string): string =>
@@ -52,6 +53,7 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
   const [decision, setDecision] = useState<string>("");
   const [deadline, setDeadline] = useState<number | null>(null);
   const [remaining, setRemaining] = useState<number>(0);
+  const [allowEdit, setAllowEdit] = useState(true);
 
   const loadScenario = useCallback(async () => {
     if (!sessionId) {
@@ -64,6 +66,7 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
       const data = await api.get<ScenarioResponse>(`/api/screening/${sessionId}`);
       setBlocks(data.blocks);
       setSubscription(data.subscription ?? null);
+      setAllowEdit(data.allowEdit !== false);
       const dl = data.expiresAt ? new Date(data.expiresAt).getTime() : null;
       setDeadline(dl);
       if (dl) setRemaining(Math.max(0, Math.floor((dl - Date.now()) / 1000)));
@@ -223,7 +226,7 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
             {t("finish")}
           </Button>
         )}
-        {step > 0 ? (
+        {step > 0 && allowEdit ? (
           <Button variant="secondary" onClick={() => setStep((s) => s - 1)}>
             {t("back")}
           </Button>

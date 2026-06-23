@@ -261,6 +261,7 @@ ownerRouter.patch("/groups/:chatId", async (req, res) => {
           : typeof body.welcomeDeleteSeconds === "number"
           ? body.welcomeDeleteSeconds
           : undefined,
+      allowEditAnswers: typeof body.allowEditAnswers === "boolean" ? body.allowEditAnswers : undefined,
     });
     res.json({ group });
   } catch (err) {

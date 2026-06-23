@@ -340,6 +340,74 @@ textarea.field {
   border-width: 2px;
 }
 
+/* Pricing cards with perk lists */
+.plan-card {
+  appearance: none;
+  border: 1px solid var(--tg-secondary-bg);
+  background: var(--tg-section-bg);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--tg-text);
+  text-align: left;
+  width: 100%;
+}
+
+.plan-card.best {
+  border: 2px solid var(--tg-button);
+}
+
+.plan-card:disabled {
+  opacity: 0.5;
+}
+
+.plan-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-perks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.plan-perks li {
+  position: relative;
+  padding-left: 22px;
+  font-size: 14px;
+  color: var(--tg-text);
+}
+
+.plan-perks li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 14px;
+  height: 8px;
+  border-left: 2px solid var(--tg-button);
+  border-bottom: 2px solid var(--tg-button);
+  transform: rotate(-45deg);
+}
+
+.plan-cta {
+  background: var(--tg-button);
+  color: var(--tg-button-text);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 16px;
+}
+
 .plan-badge {
   margin-left: 8px;
   font-size: 11px;
@@ -656,6 +724,29 @@ textarea.field {
 .check-box.on {
   background: var(--tg-button);
   border-color: var(--tg-button);
+}
+
+/* Group detail tabs: sticky + horizontally scrollable */
+.group-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  position: sticky;
+  top: var(--tg-top-inset, 0px);
+  background: var(--tg-bg);
+  padding: 8px 0;
+  z-index: 6;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.group-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.group-tabs > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .journal-head {

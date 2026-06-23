@@ -99,6 +99,7 @@ export function GroupDetail({
         welcomeEnabled: group.welcomeEnabled,
         welcomeText: group.welcomeText,
         welcomeDeleteSeconds: group.welcomeDeleteSeconds,
+        allowEditAnswers: group.allowEditAnswers,
       });
       setGroup(res.group);
       setStatus("Настройки сохранены.");
@@ -152,7 +153,7 @@ export function GroupDetail({
 
       <SetupCheck chatId={chatId} />
 
-      <div className="row" style={{ gap: 8 }}>
+      <div className="group-tabs">
         <Button small variant={tab === "scenario" ? "primary" : "secondary"} onClick={() => setTab("scenario")}>
           Сценарий
         </Button>
@@ -594,6 +595,18 @@ function SettingsForm({
           setGroup({ ...group, cooldownSeconds: Math.max(0, Number(e.target.value) || 0) })
         }
       />
+
+      <div className="divider" />
+      <div className="row">
+        <span className="icon-row">
+          <span>Разрешить менять ответ</span>
+          <InfoTip text="Заявитель может вернуться назад и изменить ответ до отправки. Если выключено, ответы менять нельзя." />
+        </span>
+        <Toggle
+          checked={group.allowEditAnswers}
+          onChange={(v) => setGroup({ ...group, allowEditAnswers: v })}
+        />
+      </div>
 
       <div className="divider" />
       <div className="row">

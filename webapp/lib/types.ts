@@ -70,6 +70,7 @@ export interface Group {
   welcomeEnabled: boolean;
   welcomeText: string | null;
   welcomeDeleteSeconds: number | null;
+  allowEditAnswers: boolean;
   _count?: { blocks: number };
 }
 

@@ -319,27 +319,47 @@ function Home({
           </Card>
 
           {!quota.unlimited ? (
-            <Card>
-              <SectionHeader icon={<CoinIcon />} title="Поменять план" />
+            <>
+              <p className="subtitle center">Поменять план</p>
               {[
-                { key: "small", title: "+5 групп", perk: "Старт", price: "2.99$", best: false },
-                { key: "big", title: "+15 групп", perk: "Выгодно", price: "6.99$", best: true },
-                { key: "unlimited", title: "Безлимит", perk: "Без ограничений", price: "14.99$", best: false },
+                {
+                  key: "small",
+                  title: "+5 групп",
+                  price: "2.99$",
+                  perks: ["5 дополнительных групп", "Базовая поддержка"],
+                  best: false,
+                },
+                {
+                  key: "big",
+                  title: "+15 групп",
+                  price: "6.99$",
+                  perks: ["15 дополнительных групп", "Приоритетная загрузка", "Поддержка в чате"],
+                  best: true,
+                },
+                {
+                  key: "unlimited",
+                  title: "Безлимит",
+                  price: "14.99$",
+                  perks: ["Группы без лимита", "Максимальный приоритет", "Поддержка 24/7"],
+                  best: false,
+                },
               ].map((p) => (
                 <button
                   key={p.key}
-                  className={`plan ${p.best ? "best" : ""}`}
+                  className={`plan-card ${p.best ? "best" : ""}`}
                   disabled={buying}
                   onClick={() => buyPlan(p.key)}
                 >
-                  <span className="plan-info">
-                    <span className="plan-title">
-                      {p.title}
-                      {p.best ? <span className="plan-badge">хит</span> : null}
-                    </span>
-                    <span className="hint">{p.perk}</span>
-                  </span>
-                  <span className="plan-price">{p.price}</span>
+                  <div className="plan-card-head">
+                    <span className="plan-title">{p.title}</span>
+                    {p.best ? <span className="plan-badge">выгоднее всего</span> : null}
+                  </div>
+                  <ul className="plan-perks">
+                    {p.perks.map((perk) => (
+                      <li key={perk}>{perk}</li>
+                    ))}
+                  </ul>
+                  <div className="plan-cta">{p.price}</div>
                 </button>
               ))}
               {awaiting ? (
@@ -352,7 +372,7 @@ function Home({
                   {error}
                 </p>
               ) : null}
-            </Card>
+            </>
           ) : null}
         </>
       ) : null}

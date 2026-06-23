@@ -138,6 +138,7 @@ export async function updateSettings(
     welcomeEnabled?: boolean;
     welcomeText?: string | null;
     welcomeDeleteSeconds?: number | null;
+    allowEditAnswers?: boolean;
   }
 ) {
   await assertOwnerOf(chatId, userId);
@@ -158,6 +159,7 @@ export async function updateSettings(
       ...(data.welcomeDeleteSeconds !== undefined
         ? { welcomeDeleteSeconds: data.welcomeDeleteSeconds == null ? null : Math.max(0, data.welcomeDeleteSeconds) }
         : {}),
+      ...(data.allowEditAnswers !== undefined ? { allowEditAnswers: data.allowEditAnswers } : {}),
     },
   });
 }

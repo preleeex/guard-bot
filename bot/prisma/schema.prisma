@@ -52,6 +52,9 @@ model Group {
   // declined without opening the Mini App. 0 disables it.
   cooldownSeconds Int @default(0)
 
+  // Whether the applicant may go back and change answers before submitting.
+  allowEditAnswers Boolean @default(true)
+
   // Voice screening: instead of the Mini App, the applicant records a voice
   // message in the bot DM and the owner approves/declines it manually.
   voiceScreening Boolean @default(false)
