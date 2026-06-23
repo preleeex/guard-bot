@@ -153,7 +153,22 @@ export function OwnerApp({
     );
   }
 
-  return <Home data={data!} reload={load} onOpenGroup={(chatId) => setView({ name: "group", chatId })} />;
+  // Never render Home with null data: a background reload (Telegram fires
+  // focus/visibility events constantly) can briefly leave data null while in
+  // flight. Show the loader / a retry instead of crashing on a null destructure.
+  if (!data)
+    return loading ? (
+      <Loading />
+    ) : (
+      <ErrorState
+        text={t("st_load_failed")}
+        onRetry={() => {
+          setLoading(true);
+          load();
+        }}
+      />
+    );
+  return <Home data={data} reload={load} onOpenGroup={(chatId) => setView({ name: "group", chatId })} />;
 }
 
 function Home({
