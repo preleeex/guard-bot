@@ -1,5 +1,5 @@
 import { prisma } from "../db";
-import { config, requiredChannelUrl } from "../config";
+import { config, requiredChannelUrl, isBotOwner } from "../config";
 import { getChatMember, getEmojiStatus, leaveChat } from "../telegram/api";
 import { markGroupRemoved, assertOwnerOf } from "./groups";
 import { logger } from "../logger";
@@ -180,6 +180,8 @@ const SUBSCRIBED_STATUSES = ["creator", "administrator", "member", "restricted"]
 // as subscribed) if the check errors, e.g. the bot is not an admin of the
 // channel, so a misconfiguration never locks everyone out.
 export async function checkSubscription(userId: bigint): Promise<ChannelRequirement> {
+  if (isBotOwner(userId)) return { required: false, subscribed: true };
+
   const channel = config.requiredChannel;
   if (!channel) return { required: false, subscribed: true };
 

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db";
+import { isBotOwner } from "../config";
 import { getBotId, getChat, getChatMember, tryCallApi } from "../telegram/api";
 import { canAddGroup } from "./quota";
 import { sendSystemLog } from "../telegram/systemLog";
@@ -23,20 +24,22 @@ export async function connectGroup(params: {
 }): Promise<{ created: boolean; reactivated: boolean }> {
   const { chatId, requesterUserId, title } = params;
 
-  // Verify creator status. Throws TelegramApiError if the bot is not in the chat.
-  const member = await getChatMember(chatId, requesterUserId);
-  if (member.status !== "creator") {
-    throw new GroupError(
-      "not_creator",
-      "Подключить группу может только её владелец (creator)."
-    );
+  // Verify creator status. The bot operator may connect any group for support.
+  if (!isBotOwner(requesterUserId)) {
+    const member = await getChatMember(chatId, requesterUserId);
+    if (member.status !== "creator") {
+      throw new GroupError(
+        "not_creator",
+        "Подключить группу может только её владелец (creator)."
+      );
+    }
   }
 
   const existing = await prisma.group.findUnique({ where: { chatId } });
 
   if (existing) {
-    // Binding is permanent: the requester must be the bound owner.
-    if (existing.ownerUserId !== requesterUserId) {
+    // Binding is permanent: the requester must be the bound owner (operator exempt).
+    if (existing.ownerUserId !== requesterUserId && !isBotOwner(requesterUserId)) {
       throw new GroupError(
         "bound_to_other_owner",
         "Эта группа уже привязана к другому владельцу."
@@ -93,7 +96,7 @@ export async function connectGroup(params: {
 
 export async function listGroups(ownerUserId: bigint) {
   return prisma.group.findMany({
-    where: { ownerUserId, removedAt: null },
+    where: isBotOwner(ownerUserId) ? { removedAt: null } : { ownerUserId, removedAt: null },
     orderBy: { connectedAt: "asc" },
     include: { _count: { select: { blocks: true } } },
   });
@@ -106,7 +109,7 @@ export async function assertOwnerOf(chatId: bigint, userId: bigint) {
   if (!group || group.removedAt) {
     throw new GroupError("not_found", "Группа не найдена.");
   }
-  if (group.ownerUserId !== userId) {
+  if (group.ownerUserId !== userId && !isBotOwner(userId)) {
     throw new GroupError("forbidden", "Нет доступа к этой группе.");
   }
   return group;

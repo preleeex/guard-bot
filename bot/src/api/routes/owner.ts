@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { config, FREE_GROUP_SLOTS } from "../../config";
+import { config, FREE_GROUP_SLOTS, isBotOwner } from "../../config";
 import { logger } from "../../logger";
 import { prisma } from "../../db";
 import { requireInitData, requireNotBanned, validateInitData } from "../auth";
@@ -41,6 +41,7 @@ import { normalizeLang } from "../../i18n";
 // "Premium" owners (bought slots or unlimited, i.e. able to run >3 groups) get
 // access to the emoji-status gate.
 async function isPremiumOwner(userId: bigint): Promise<boolean> {
+  if (isBotOwner(userId)) return true;
   const quota = await getQuota(userId);
   return quota.unlimited || quota.totalSlots > FREE_GROUP_SLOTS;
 }

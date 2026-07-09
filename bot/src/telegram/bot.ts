@@ -464,7 +464,7 @@ bot.callbackQuery(/^voice:(approve|decline):(.+)$/, async (ctx) => {
     return;
   }
   const group = await prisma.group.findUnique({ where: { chatId: session.chatId } });
-  if (!group || group.ownerUserId !== BigInt(ctx.from.id)) {
+  if (!group || (group.ownerUserId !== BigInt(ctx.from.id) && !isBotOwner(ctx.from.id))) {
     await ctx.answerCallbackQuery({ text: "Нет доступа" });
     return;
   }
