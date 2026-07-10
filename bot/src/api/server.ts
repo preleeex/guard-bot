@@ -60,15 +60,23 @@ export function buildApp() {
   // Telegram webhook. Verify the secret token, acknowledge immediately, then
   // process the update in the background. Acknowledging fast prevents gateway
   // timeouts and Telegram retry storms (which were exhausting the DB pool).
-  app.post("/telegram/webhook", (req: Request, res: Response) => {
+  app.post("/telegram/webhook", async (req: Request, res: Response) => {
     if (req.header("X-Telegram-Bot-Api-Secret-Token") !== config.webhookSecretToken) {
       res.sendStatus(401);
       return;
     }
+    const update = req.body as Update;
     res.sendStatus(200);
-    void bot
-      .handleUpdate(req.body as Update)
-      .catch((err) => logger.error("handleUpdate failed", { err: String(err) }));
+    const run = bot.handleUpdate(update).catch((err) =>
+      logger.error("handleUpdate failed", { err: String(err) })
+    );
+    // Join request queries expire in ~10s; await so this update is not queued
+    // behind slower handlers when the event loop is busy.
+    if (update.chat_join_request) {
+      await run;
+    } else {
+      void run;
+    }
   });
 
   // Mini App API.

@@ -1,4 +1,4 @@
-name: Deploy Bot (DigitalOcean App Platform)
+name: Deploy Bot (Render)
 
 on:
   push:
@@ -6,18 +6,18 @@ on:
     paths:
       - "bot/**"
       - ".github/workflows/deploy-bot.yml"
+      - "render.yaml"
 
 # Required repo secrets:
-#   DIGITALOCEAN_ACCESS_TOKEN  DigitalOcean API token
-#   DIGITALOCEAN_APP_ID        App Platform app id (after first creation)
+#   RENDER_API_KEY       Render API key (Dashboard -> Account Settings -> API Keys)
+#   RENDER_SERVICE_ID    guard-bot web service id (srv-...)
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-      # Trigger a new deployment of the existing app. App Platform rebuilds the
-      # bot/ Dockerfile, runs prisma migrate deploy, then starts the server.
-      - run: doctl apps create-deployment ${{ secrets.DIGITALOCEAN_APP_ID }} --wait
+      - name: Trigger Render deploy
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Accept: application/json" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys"

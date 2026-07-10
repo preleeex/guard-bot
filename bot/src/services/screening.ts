@@ -29,6 +29,7 @@ import type {
 // --- session creation ------------------------------------------------------
 
 interface CreateSessionInput {
+  sessionId?: string;
   chatId: bigint;
   applicantUserId: bigint;
   applicantUsername?: string | null;
@@ -80,6 +81,7 @@ export async function createScreeningSession(input: CreateSessionInput) {
 
   return prisma.screeningSession.create({
     data: {
+      ...(input.sessionId ? { id: input.sessionId } : {}),
       chatId: input.chatId,
       applicantUserId: input.applicantUserId,
       applicantUsername: input.applicantUsername ?? null,

@@ -1,4 +1,5 @@
 import { Bot, InlineKeyboard } from "grammy";
+import { randomUUID } from "crypto";
 import { config, isBotOwner } from "../config";
 import { prisma } from "../db";
 import { logger } from "../logger";
@@ -25,6 +26,42 @@ import { registerAdminCommands } from "./adminCommands";
 // were not let in.
 function infoUrl(reason: string): string {
   return `${config.miniAppUrl}/?mode=info&reason=${encodeURIComponent(reason)}`;
+}
+
+// Join Request Queries (Bot API 10.1): query_id expires in ~10 seconds. Call
+// sendChatJoinRequestWebApp as early as possible and persist the session in
+// parallel so the Mini App URL is valid once Telegram opens it.
+async function openJoinRequestWebApp(
+  queryId: string,
+  webAppUrl: string,
+  receivedAt: number,
+  logCtx: Record<string, unknown>
+): Promise<boolean> {
+  const ok = await tryCallApi("sendChatJoinRequestWebApp", {
+    chat_join_request_query_id: queryId,
+    web_app_url: webAppUrl,
+  });
+  const elapsedMs = Date.now() - receivedAt;
+  if (ok === null) {
+    logger.error("sendChatJoinRequestWebApp failed", { ...logCtx, elapsedMs });
+    return false;
+  }
+  logger.info("shown Mini App via query mode", { ...logCtx, elapsedMs });
+  return true;
+}
+
+async function persistSessionAfterWebApp(
+  sessionPromise: ReturnType<typeof createScreeningSession>,
+  sessionId: string
+): Promise<void> {
+  try {
+    await sessionPromise;
+  } catch (err) {
+    logger.error("createScreeningSession failed after webapp", {
+      sessionId,
+      err: String(err),
+    });
+  }
 }
 
 export const bot = new Bot(config.botToken);
@@ -172,6 +209,7 @@ bot.command("unban", async (ctx) => {
 
 // Core: a user requested to join a guarded group.
 bot.on("chat_join_request", async (ctx) => {
+  const receivedAt = Date.now();
   // `query_id` is a Bot API 10.1 field that the SDK may not type yet.
   const update = ctx.update.chat_join_request as typeof ctx.update.chat_join_request & {
     query_id?: string;
@@ -180,8 +218,13 @@ bot.on("chat_join_request", async (ctx) => {
   const applicant = update.from;
   const queryId = update.query_id;
 
+  const [applicantBanned, group] = await Promise.all([
+    isBanned(BigInt(applicant.id)),
+    prisma.group.findUnique({ where: { chatId } }),
+  ]);
+
   // Banned users: decline immediately, never open the Mini App.
-  if (await isBanned(BigInt(applicant.id))) {
+  if (applicantBanned) {
     if (queryId) {
       await tryCallApi("answerChatJoinRequestQuery", {
         chat_join_request_query_id: queryId,
@@ -193,8 +236,6 @@ bot.on("chat_join_request", async (ctx) => {
     return;
   }
 
-  const group = await prisma.group.findUnique({ where: { chatId } });
-
   logger.info("chat_join_request received", {
     chatId: chatId.toString(),
     hasQueryId: Boolean(queryId),
@@ -205,7 +246,23 @@ bot.on("chat_join_request", async (ctx) => {
 
   // Not configured, guard disabled, or the group owner is globally banned: hand
   // the request back to humans and never screen.
-  if (!group || group.removedAt || !group.guardEnabled || (await isBanned(group.ownerUserId))) {
+  if (!group || group.removedAt || !group.guardEnabled) {
+    if (queryId) {
+      await tryCallApi("answerChatJoinRequestQuery", {
+        chat_join_request_query_id: queryId,
+        result: "queue",
+      });
+    }
+    return;
+  }
+
+  const [ownerBanned, groupBanned, onCooldown] = await Promise.all([
+    isBanned(group.ownerUserId),
+    isGroupBanned(chatId, BigInt(applicant.id)),
+    isOnCooldown(chatId, BigInt(applicant.id), group.cooldownSeconds),
+  ]);
+
+  if (ownerBanned) {
     if (queryId) {
       await tryCallApi("answerChatJoinRequestQuery", {
         chat_join_request_query_id: queryId,
@@ -216,7 +273,7 @@ bot.on("chat_join_request", async (ctx) => {
   }
 
   // Per-group ban (set by the owner): auto-decline without opening the Mini App.
-  if (await isGroupBanned(chatId, BigInt(applicant.id))) {
+  if (groupBanned) {
     if (queryId) {
       await tryCallApi("answerChatJoinRequestQuery", {
         chat_join_request_query_id: queryId,
@@ -236,12 +293,6 @@ bot.on("chat_join_request", async (ctx) => {
       startedAt: new Date(),
     });
     return;
-  }
-
-  // Legacy join request (no query id) while guard is on: the guard bot may have
-  // been unassigned. Nudge the owner once (deduped) so they can re-assign it.
-  if (!queryId) {
-    void nudgeGuardIfNeeded(chatId);
   }
 
   // Anti-raid: during a surge of join requests, queue everything for manual
@@ -264,7 +315,7 @@ bot.on("chat_join_request", async (ctx) => {
   }
 
   // Anti-spam cooldown: a recently declined applicant is auto-declined.
-  if (await isOnCooldown(chatId, BigInt(applicant.id), group.cooldownSeconds)) {
+  if (onCooldown) {
     if (queryId) {
       await tryCallApi("answerChatJoinRequestQuery", {
         chat_join_request_query_id: queryId,
@@ -284,9 +335,9 @@ bot.on("chat_join_request", async (ctx) => {
     const ok = await hasRequiredEmojiStatus(BigInt(applicant.id), group.emojiStatusId);
     if (!ok) {
       if (queryId) {
-        await tryCallApi("sendChatJoinRequestWebApp", {
-          chat_join_request_query_id: queryId,
-          web_app_url: infoUrl("emoji"),
+        await openJoinRequestWebApp(queryId, infoUrl("emoji"), receivedAt, {
+          reason: "emoji",
+          applicant: applicant.id,
         });
         return;
       }
@@ -315,28 +366,42 @@ bot.on("chat_join_request", async (ctx) => {
   // DM); in legacy mode we DM the prompt directly.
   if (group.voiceScreening) {
     const lang = normalizeLang(applicant.language_code);
-    const voiceSession = await createScreeningSession({
-      chatId,
-      applicantUserId: BigInt(applicant.id),
-      applicantUsername: applicant.username ?? null,
-      applicantName: applicant.first_name ?? null,
-      queryId: queryId ?? null,
-      mode: "voice",
-      timeoutSeconds: group.timeoutSeconds,
-    });
     const prompt = group.voicePrompt?.trim() || t(lang, "voice_default_prompt");
     if (queryId) {
-      const ok = await tryCallApi("sendChatJoinRequestWebApp", {
-        chat_join_request_query_id: queryId,
-        web_app_url: screeningUrl(voiceSession.id),
+      const sessionId = randomUUID();
+      const sessionPromise = createScreeningSession({
+        sessionId,
+        chatId,
+        applicantUserId: BigInt(applicant.id),
+        applicantUsername: applicant.username ?? null,
+        applicantName: applicant.first_name ?? null,
+        queryId,
+        mode: "voice",
+        timeoutSeconds: group.timeoutSeconds,
       });
-      if (ok === null) {
+      const shown = await openJoinRequestWebApp(
+        queryId,
+        screeningUrl(sessionId),
+        receivedAt,
+        { sessionId, applicant: applicant.id, mode: "voice" }
+      );
+      await persistSessionAfterWebApp(sessionPromise, sessionId);
+      if (!shown) {
         await tryCallApi("sendMessage", {
           chat_id: applicant.id,
           text: `${prompt}\n\n${t(lang, "voice_send_here")}`,
         });
       }
     } else {
+      const voiceSession = await createScreeningSession({
+        chatId,
+        applicantUserId: BigInt(applicant.id),
+        applicantUsername: applicant.username ?? null,
+        applicantName: applicant.first_name ?? null,
+        queryId: null,
+        mode: "voice",
+        timeoutSeconds: group.timeoutSeconds,
+      });
       const dm = await tryCallApi("sendMessage", {
         chat_id: applicant.id,
         text: `${prompt}\n\n${t(lang, "voice_send_here")}`,
@@ -348,41 +413,60 @@ bot.on("chat_join_request", async (ctx) => {
         });
       }
     }
+    if (!queryId) void nudgeGuardIfNeeded(chatId);
     return;
   }
 
-  const session = await createScreeningSession({
-    chatId,
-    applicantUserId: BigInt(applicant.id),
-    applicantUsername: applicant.username ?? null,
-    applicantName: applicant.first_name ?? null,
-    queryId: queryId ?? null,
-    mode: queryId ? "query" : "legacy",
-    timeoutSeconds: group.timeoutSeconds,
-  });
-
-  const url = screeningUrl(session.id);
+  const lang = normalizeLang(applicant.language_code);
 
   if (queryId) {
-    // Preferred path: show the Mini App in the join request context.
-    const ok = await tryCallApi("sendChatJoinRequestWebApp", {
-      chat_join_request_query_id: queryId,
-      web_app_url: url,
+    const sessionId = randomUUID();
+    const keyboard = new InlineKeyboard().webApp(t(lang, "pass_verification"), screeningUrl(sessionId));
+    const sessionPromise = createScreeningSession({
+      sessionId,
+      chatId,
+      applicantUserId: BigInt(applicant.id),
+      applicantUsername: applicant.username ?? null,
+      applicantName: applicant.first_name ?? null,
+      queryId,
+      mode: "query",
+      timeoutSeconds: group.timeoutSeconds,
     });
-    if (ok === null) {
-      logger.error("sendChatJoinRequestWebApp failed; session will time out", {
-        sessionId: session.id,
+    const shown = await openJoinRequestWebApp(
+      queryId,
+      screeningUrl(sessionId),
+      receivedAt,
+      { sessionId, applicant: applicant.id }
+    );
+    await persistSessionAfterWebApp(sessionPromise, sessionId);
+    if (!shown) {
+      const dm = await tryCallApi("sendMessage", {
+        chat_id: applicant.id,
+        text: t(lang, "verify_to_join"),
+        reply_markup: keyboard,
       });
-    } else {
-      logger.info("shown Mini App via query mode", { sessionId: session.id });
+      if (dm === null) {
+        logger.warn("could not DM applicant after webapp failed", {
+          sessionId,
+          applicant: applicant.id,
+        });
+      }
     }
     return;
   }
 
   // Legacy path: DM the applicant a button to open the Mini App. Requires an
   // open DM with the bot; otherwise the session times out to the group action.
-  const lang = normalizeLang(applicant.language_code);
-  const keyboard = new InlineKeyboard().webApp(t(lang, "pass_verification"), url);
+  const session = await createScreeningSession({
+    chatId,
+    applicantUserId: BigInt(applicant.id),
+    applicantUsername: applicant.username ?? null,
+    applicantName: applicant.first_name ?? null,
+    queryId: null,
+    mode: "legacy",
+    timeoutSeconds: group.timeoutSeconds,
+  });
+  const keyboard = new InlineKeyboard().webApp(t(lang, "pass_verification"), screeningUrl(session.id));
   const dm = await tryCallApi("sendMessage", {
     chat_id: applicant.id,
     text: t(lang, "verify_to_join"),
@@ -394,6 +478,7 @@ bot.on("chat_join_request", async (ctx) => {
       applicant: applicant.id,
     });
   }
+  void nudgeGuardIfNeeded(chatId);
 });
 
 // Voice screening: the applicant sends a voice message to the bot DM. Attach it
