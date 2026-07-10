@@ -1,0 +1,36 @@
+# Render Blueprint for the Guard Bot backend.
+# Service id after first create: srv-d97rn7rtqb8s73di2cbg
+services:
+  - type: web
+    name: guard-bot
+    runtime: docker
+    region: frankfurt
+    plan: free
+    repo: https://github.com/preleeex/guard-bot
+    branch: main
+    rootDir: bot
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: BOT_TOKEN
+        sync: false
+      - key: BOT_USERNAME
+        value: SpaceToBanBot
+      - key: OWNER_USER_ID
+        value: "7210276147"
+      - key: SYSTEM_LOG_CHAT_ID
+        value: "3275669277"
+      - key: WEBHOOK_SECRET_TOKEN
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: MINI_APP_URL
+        value: https://www.regift.cloud
+      - key: CRYPTO_PAY_API_BASE
+        value: https://pay.crypt.bot/api
+      - key: CRYPTO_PAY_API_TOKEN
+        sync: false
+      - key: PORT
+        value: "8080"
