@@ -363,6 +363,9 @@ bot.on("chat_join_request", async (ctx) => {
 
   const url = screeningUrl(session.id);
 
+  const lang = normalizeLang(applicant.language_code);
+  const keyboard = new InlineKeyboard().webApp(t(lang, "pass_verification"), url);
+
   if (queryId) {
     // Preferred path: show the Mini App in the join request context.
     const ok = await tryCallApi("sendChatJoinRequestWebApp", {
@@ -370,9 +373,24 @@ bot.on("chat_join_request", async (ctx) => {
       web_app_url: url,
     });
     if (ok === null) {
-      logger.error("sendChatJoinRequestWebApp failed; session will time out", {
+      // Telegram sometimes rejects the inline webapp (guard unassigned, domain
+      // mismatch, expired query_id). Fall back to DM so the session does not
+      // silently time out with the user seeing nothing.
+      logger.error("sendChatJoinRequestWebApp failed; falling back to DM", {
         sessionId: session.id,
+        applicant: applicant.id,
       });
+      const dm = await tryCallApi("sendMessage", {
+        chat_id: applicant.id,
+        text: t(lang, "verify_to_join"),
+        reply_markup: keyboard,
+      });
+      if (dm === null) {
+        logger.warn("could not DM applicant after webapp failed", {
+          sessionId: session.id,
+          applicant: applicant.id,
+        });
+      }
     } else {
       logger.info("shown Mini App via query mode", { sessionId: session.id });
     }
@@ -381,8 +399,6 @@ bot.on("chat_join_request", async (ctx) => {
 
   // Legacy path: DM the applicant a button to open the Mini App. Requires an
   // open DM with the bot; otherwise the session times out to the group action.
-  const lang = normalizeLang(applicant.language_code);
-  const keyboard = new InlineKeyboard().webApp(t(lang, "pass_verification"), url);
   const dm = await tryCallApi("sendMessage", {
     chat_id: applicant.id,
     text: t(lang, "verify_to_join"),
