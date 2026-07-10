@@ -62,29 +62,38 @@ export function Screening({ sessionId }: { sessionId: string | null }) {
       return;
     }
     setState("loading");
-    try {
-      const data = await api.get<ScenarioResponse>(`/api/screening/${sessionId}`);
-      setBlocks(data.blocks);
-      setSubscription(data.subscription ?? null);
-      setAllowEdit(data.allowEdit !== false);
-      const dl = data.expiresAt ? new Date(data.expiresAt).getTime() : null;
-      setDeadline(dl);
-      if (dl) setRemaining(Math.max(0, Math.floor((dl - Date.now()) / 1000)));
-      if (data.subscription?.required && !data.subscription.subscribed) {
-        setState("gate");
-      } else if (data.voice) {
-        setVoicePrompt(data.voicePrompt?.trim() || t("voice_default_prompt"));
-        setState("voice");
-      } else {
-        setState("form");
-      }
-    } catch (e) {
-      if ((e as ApiError).code === "banned") {
-        setState("banned");
+    const maxAttempts = 6;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const data = await api.get<ScenarioResponse>(`/api/screening/${sessionId}`);
+        setBlocks(data.blocks);
+        setSubscription(data.subscription ?? null);
+        setAllowEdit(data.allowEdit !== false);
+        const dl = data.expiresAt ? new Date(data.expiresAt).getTime() : null;
+        setDeadline(dl);
+        if (dl) setRemaining(Math.max(0, Math.floor((dl - Date.now()) / 1000)));
+        if (data.subscription?.required && !data.subscription.subscribed) {
+          setState("gate");
+        } else if (data.voice) {
+          setVoicePrompt(data.voicePrompt?.trim() || t("voice_default_prompt"));
+          setState("voice");
+        } else {
+          setState("form");
+        }
+        return;
+      } catch (e) {
+        if ((e as ApiError).code === "banned") {
+          setState("banned");
+          return;
+        }
+        if ((e as ApiError).code === "not_found" && attempt < maxAttempts - 1) {
+          await new Promise((r) => setTimeout(r, 400));
+          continue;
+        }
+        setState("error");
+        setError((e as ApiError).message || t("load_failed"));
         return;
       }
-      setState("error");
-      setError((e as ApiError).message || t("load_failed"));
     }
   }, [sessionId]);
 
